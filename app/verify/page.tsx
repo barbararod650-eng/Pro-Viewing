@@ -111,10 +111,6 @@ export default function VerifyPage() {
         video: { facingMode: 'user' },
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
       setCameraActive(true);
     } catch {
       setCameraError(
@@ -122,6 +118,15 @@ export default function VerifyPage() {
       );
     }
   };
+
+  // Attach the camera stream once the <video> element actually exists in the
+  // page (it only renders after cameraActive becomes true).
+  useEffect(() => {
+    if (cameraActive && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [cameraActive]);
 
   const captureSelfie = () => {
     if (!videoRef.current || !canvasRef.current) return;
