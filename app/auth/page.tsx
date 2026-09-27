@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,8 +18,32 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
+  const [confirmedRedirect, setConfirmedRedirect] = useState(false);
   const { signUp, signIn, booking } = useApp();
   const router = useRouter();
+  
+  useEffect(() => {
+    const justConfirmed =
+      typeof window !== 'undefined' && window.location.hash.includes('type=signup');
+
+    if (justConfirmed) {
+      setConfirmedRedirect(true);
+      const timeout = setTimeout(() => router.push('/verify'), 2000);
+      return () => clearTimeout(timeout);
+    }
+  }, [router]);
+    useEffect(() => {
+    // If a Supabase email-confirmation link just logged this person in,
+    // or they're already signed in from a previous visit, skip the form.
+    const justConfirmed =
+      typeof window !== 'undefined' && window.location.hash.includes('type=signup');
+
+    if (justConfirmed) {
+      setConfirmedRedirect(true);
+      const timeout = setTimeout(() => router.push('/verify'), 2000);
+      return () => clearTimeout(timeout);
+    }
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,6 +101,26 @@ export default function AuthPage() {
           >
             Back to sign in
           </Button>
+        </motion.div>
+      </div>
+    );
+  }
+
+  
+  if (confirmedRedirect) {
+    return (
+      <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-background p-8">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="max-w-md text-center"
+        >
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-accent">
+            <Check className="h-8 w-8 text-accent-foreground" />
+          </div>
+          <h1 className="text-2xl font-bold text-primary">Email confirmed!</h1>
+          <p className="mt-2 text-muted-foreground">You're all set. Taking you to identity verification...</p>
         </motion.div>
       </div>
     );
