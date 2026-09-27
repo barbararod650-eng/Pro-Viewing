@@ -20,9 +20,11 @@ export interface AuthUser {
 
 export interface AppState {
   user: AuthUser | null;
+  authLoading: boolean;
   booking: ViewingBooking;
-  login: (email: string, name: string) => void;
-  logout: () => void;
+  signUp: (email: string, password: string, name: string) => Promise<{ error: string | null; needsEmailConfirmation: boolean }>;
+  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  logout: () => Promise<void>;
   scheduleViewing: (date: string, timeSlot: string) => void;
   setVerified: () => void;
   setPaid: () => void;
@@ -30,8 +32,10 @@ export interface AppState {
 }
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { supabase } from '@/lib/supabase-client';
+import type { Session } from '@supabase/supabase-js';
 
-const STORAGE_KEY = 'keyview_state_v1';
+const BOOKING_STORAGE_KEY = 'keyview_booking_v1';
 
 function generateAccessCode(): string {
   return Math.floor(1000 + Math.random() * 9000).toString();
@@ -44,44 +48,81 @@ const defaultBooking: ViewingBooking = {
   accessCode: '8492',
 };
 
-function loadState(): { user: AuthUser | null; booking: ViewingBooking } {
-  if (typeof window === 'undefined') return { user: null, booking: defaultBooking };
+function loadBooking(): ViewingBooking {
+  if (typeof window === 'undefined') return defaultBooking;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { user: null, booking: defaultBooking };
-    const parsed = JSON.parse(raw);
-    return {
-      user: parsed.user ?? null,
-      booking: parsed.booking ?? defaultBooking,
-    };
+    const raw = localStorage.getItem(BOOKING_STORAGE_KEY);
+    if (!raw) return defaultBooking;
+    return JSON.parse(raw);
   } catch {
-    return { user: null, booking: defaultBooking };
+    return defaultBooking;
   }
+}
+
+function userFromSession(session: Session | null): AuthUser | null {
+  if (!session?.user?.email) return null;
+  const name =
+    (session.user.user_metadata?.full_name as string | undefined) ||
+    session.user.email.split('@')[0];
+  return { email: session.user.email, name };
 }
 
 const AppContext = createContext<AppState | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [booking, setBooking] = useState<ViewingBooking>(defaultBooking);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    const { user: u, booking: b } = loadState();
-    setUser(u);
-    setBooking(b);
+    setBooking(loadBooking());
     setHydrated(true);
+
+    supabase.auth.getSession().then(({ data }) => {
+      setUser(userFromSession(data.session));
+      setAuthLoading(false);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(userFromSession(session));
+    });
+
+    return () => listener.subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
     if (!hydrated) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ user, booking }));
-  }, [user, booking, hydrated]);
+    localStorage.setItem(BOOKING_STORAGE_KEY, JSON.stringify(booking));
+  }, [booking, hydrated]);
 
-  const login = (email: string, name: string) => setUser({ email, name });
+  const signUp = async (email: string, password: string, name: string) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { full_name: name },
+        emailRedirectTo:
+          typeof window !== 'undefined' ? `${window.location.origin}/auth` : undefined,
+      },
+    });
 
-  const logout = () => {
-    setUser(null);
+    if (error) return { error: error.message, needsEmailConfirmation: false };
+
+    // If Supabase returns a session immediately, email confirmation is OFF
+    // for this project and the user is already logged in.
+    const needsEmailConfirmation = !data.session;
+    return { error: null, needsEmailConfirmation };
+  };
+
+  const signIn = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return { error: error.message };
+    return { error: null };
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
     setBooking(defaultBooking);
   };
 
@@ -105,7 +146,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   return (
     <AppContext.Provider
-      value={{ user, booking, login, logout, scheduleViewing, setVerified, setPaid, resetBooking }}
+      value={{
+        user,
+        authLoading,
+        booking,
+        signUp,
+        signIn,
+        logout,
+        scheduleViewing,
+        setVerified,
+        setPaid,
+        resetBooking,
+      }}
     >
       {children}
     </AppContext.Provider>

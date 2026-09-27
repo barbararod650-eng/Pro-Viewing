@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { useApp } from '@/lib/app-context';
 import { PROPERTY } from '@/lib/property';
 import { useRouter } from 'next/navigation';
-import { ShieldCheck, Lock, Mail, User, ArrowRight, Check } from 'lucide-react';
+import { ShieldCheck, Lock, Mail, User, ArrowRight, Check, MailCheck } from 'lucide-react';
 
 export default function AuthPage() {
   const [mode, setMode] = useState<'signup' | 'login'>('signup');
@@ -16,17 +16,71 @@ export default function AuthPage() {
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login, booking } = useApp();
+  const [error, setError] = useState('');
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
+  const { signUp, signIn, booking } = useApp();
   const router = useRouter();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     setLoading(true);
-    setTimeout(() => {
-      login(email, name || email.split('@')[0]);
-      router.push(booking.status === 'idle' ? '/verify' : '/verify');
-    }, 800);
+
+    if (mode === 'signup') {
+      const { error, needsEmailConfirmation } = await signUp(email, password, name || email.split('@')[0]);
+      setLoading(false);
+      if (error) {
+        setError(error);
+        return;
+      }
+      if (needsEmailConfirmation) {
+        setAwaitingConfirmation(true);
+        return;
+      }
+      router.push('/verify');
+    } else {
+      const { error } = await signIn(email, password);
+      setLoading(false);
+      if (error) {
+        setError(error);
+        return;
+      }
+      router.push('/verify');
+    }
   };
+
+  if (awaitingConfirmation) {
+    return (
+      <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-background p-8">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="max-w-md text-center"
+        >
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-accent/10">
+            <MailCheck className="h-8 w-8 text-accent" />
+          </div>
+          <h1 className="text-2xl font-bold text-primary">Check your email</h1>
+          <p className="mt-2 text-muted-foreground">
+            We sent a confirmation link to <span className="font-medium text-primary">{email}</span>.
+            Click it to activate your account, then come back here and sign in.
+          </p>
+          <Button
+            className="mt-6"
+            variant="outline"
+            onClick={() => {
+              setAwaitingConfirmation(false);
+              setMode('login');
+              setPassword('');
+            }}
+          >
+            Back to sign in
+          </Button>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-[calc(100vh-4rem)] flex-col lg:flex-row">
@@ -90,7 +144,10 @@ export default function AuthPage() {
         >
           <div className="mb-6 flex rounded-lg border border-border p-1">
             <button
-              onClick={() => setMode('signup')}
+              onClick={() => {
+                setMode('signup');
+                setError('');
+              }}
               className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${
                 mode === 'signup' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'
               }`}
@@ -98,7 +155,10 @@ export default function AuthPage() {
               Create Account
             </button>
             <button
-              onClick={() => setMode('login')}
+              onClick={() => {
+                setMode('login');
+                setError('');
+              }}
               className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${
                 mode === 'login' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'
               }`}
@@ -171,9 +231,19 @@ export default function AuthPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   className="pl-10"
                   required
+                  minLength={6}
                 />
               </div>
+              {mode === 'signup' && (
+                <p className="mt-1 text-xs text-muted-foreground">At least 6 characters.</p>
+              )}
             </div>
+
+            {error && (
+              <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {error}
+              </p>
+            )}
 
             <Button
               type="submit"
@@ -196,7 +266,6 @@ export default function AuthPage() {
 
           <p className="mt-6 text-center text-xs text-muted-foreground">
             By continuing, you agree to our Terms of Service and Privacy Policy.
-            This is a demo — no real account is created.
           </p>
         </motion.div>
       </div>
