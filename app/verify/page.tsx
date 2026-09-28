@@ -38,16 +38,28 @@ export default function VerifyPage() {
   const [reviewStatus, setReviewStatus] = useState<ReviewStatus | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
 
-  const { user, setVerified } = useApp();
+  const { user, authLoading, setVerified, verification, payment } = useApp();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
+   useEffect(() => {
+    if (!authLoading && !user) router.push('/auth');
+  }, [authLoading, user, router]);
+
+  // Already verified (or already submitted)? Don't make them redo the flow.
   useEffect(() => {
-    if (!user) router.push('/auth');
-  }, [user, router]);
+    if (verification === 'approved') {
+      setVerified();
+      router.replace(payment === 'confirmed' ? '/dashboard' : '/payment');
+    } else if (verification === 'pending' && !reviewStatus) {
+      setCurrentStep(3);
+      setReviewStatus('pending');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verification, payment]);
 
   useEffect(() => {
     if (currentStep !== 2 && streamRef.current) {

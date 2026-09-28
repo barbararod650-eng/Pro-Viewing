@@ -19,7 +19,7 @@ export default function AuthPage() {
   const [error, setError] = useState('');
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
   const [confirmedRedirect, setConfirmedRedirect] = useState(false);
-  const { signUp, signIn, booking } = useApp();
+  const { user, signUp, signIn, booking } = useApp();
   const router = useRouter();
   
   useEffect(() => {
@@ -32,6 +32,11 @@ export default function AuthPage() {
       return () => clearTimeout(timeout);
     }
   }, [router]);
+  
+  // Already signed in? Skip the form.
+  useEffect(() => {
+    if (user && !confirmedRedirect) router.replace('/verify');
+  }, [user, confirmedRedirect, router]);
     useEffect(() => {
     // If a Supabase email-confirmation link just logged this person in,
     // or they're already signed in from a previous visit, skip the form.

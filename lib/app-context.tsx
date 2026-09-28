@@ -18,9 +18,22 @@ export interface AuthUser {
   name: string;
 }
 
+export type VerificationState = 'unknown' | 'none' | 'pending' | 'approved' | 'rejected';
+export type PaymentState =
+  | 'unknown'
+  | 'none'
+  | 'pending_admin_assignment'
+  | 'awaiting_payment'
+  | 'reported_paid'
+  | 'confirmed'
+  | 'cancelled';
+
 export interface AppState {
   user: AuthUser | null;
   authLoading: boolean;
+  verification: VerificationState;
+  payment: PaymentState;
+  refreshStatus: () => Promise<void>;
   booking: ViewingBooking;
   signUp: (email: string, password: string, name: string) => Promise<{ error: string | null; needsEmailConfirmation: boolean }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
@@ -31,7 +44,7 @@ export interface AppState {
   resetBooking: () => void;
 }
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase-client';
 import type { Session } from '@supabase/supabase-js';
 
@@ -74,6 +87,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [authLoading, setAuthLoading] = useState(true);
   const [booking, setBooking] = useState<ViewingBooking>(defaultBooking);
   const [hydrated, setHydrated] = useState(false);
+  const [verification, setVerification] = useState<VerificationState>('unknown');
+  const [payment, setPayment] = useState<PaymentState>('unknown');
+  const email = user?.email;
+
+  const refreshStatus = useCallback(async () => {
+    if (!email) return;
+    try {
+      const [vRes, pRes] = await Promise.all([
+        fetch(`/api/verify/status?email=${encodeURIComponent(email)}`),
+        fetch(`/api/payment/status?email=${encodeURIComponent(email)}`),
+      ]);
+      const v = await vRes.json();
+      const p = await pRes.json();
+      setVerification(v.verification?.status ?? 'none');
+      setPayment(p.paymentRequest?.status ?? 'none');
+    } catch {
+      // keep whatever we had on a transient network error
+    }
+  }, [email]);
+
+  useEffect(() => {
+    if (email) {
+      refreshStatus();
+    } else {
+      setVerification('unknown');
+      setPayment('unknown');
+    }
+  }, [email, refreshStatus]);
 
   useEffect(() => {
     setBooking(loadBooking());
@@ -149,6 +190,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         authLoading,
+        verification,
+        payment,
+        refreshStatus,
         booking,
         signUp,
         signIn,
