@@ -1,4 +1,4 @@
-import { TIME_SLOTS, PROPERTY_TIMEZONE } from '@/lib/property';
+
 
 // Length of generated access codes (digits).
 export const ACCESS_CODE_LENGTH = 6;
@@ -63,15 +63,17 @@ export function isValidDateStr(s: string): boolean {
 // using the property's timezone. Returns null if either input is invalid.
 export function slotToUtcRange(
   dateStr: string,
-  label: string
+  label: string,
+  timeSlots: string[],
+  timezone: string
 ): { startMs: number; endMs: number } | null {
   if (!isValidDateStr(dateStr)) return null;
-  if (!TIME_SLOTS.includes(label)) return null;
+  if (!timeSlots.includes(label)) return null;
   const parsed = parseSlotLabel(label);
   if (!parsed) return null;
 
   return {
-    startMs: zonedTimeToUtcMs(dateStr, parsed.start.h, parsed.start.m, PROPERTY_TIMEZONE),
-    endMs: zonedTimeToUtcMs(dateStr, parsed.end.h, parsed.end.m, PROPERTY_TIMEZONE),
+    startMs: zonedTimeToUtcMs(dateStr, parsed.start.h, parsed.start.m, timezone),
+    endMs: zonedTimeToUtcMs(dateStr, parsed.end.h, parsed.end.m, timezone),
   };
 }

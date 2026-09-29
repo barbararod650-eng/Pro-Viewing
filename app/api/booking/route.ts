@@ -1,23 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomInt } from 'crypto';
-import { getSupabaseAdmin } from '@/lib/supabase-admin';
+import { getSupabaseAdmin, getDefaultPropertyId } from '@/lib/supabase-admin';
 import { getAuthedUser } from '@/lib/auth-server';
 import { ACCESS_CODE_LENGTH, slotToUtcRange } from '@/lib/booking-utils';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const VIEWING_COLUMNS = 'id, slot_date, slot_label, slot_start, slot_end';
+const VIEWING_COLUMNS = 'id, property_id, slot_date, slot_label, slot_start, slot_end';
 
 function generateAccessCode(): string {
   return randomInt(0, 10 ** ACCESS_CODE_LENGTH).toString().padStart(ACCESS_CODE_LENGTH, '0');
 }
 
-// The signed-in person's current booking. Never includes the access code.
 export async function GET(req: NextRequest) {
   const user = await getAuthedUser(req);
   if (!user) {
     return NextResponse.json({ error: 'Please sign in.' }, { status: 401 });
+  }
+
+  const propertyId = req.nextUrl.searchParams.get('propertyId') || (await getDefaultPropertyId());
+  if (!propertyId) {
+    return NextResponse.json({ error: 'No property specified.' }, { status: 400 });
   }
 
   const supabase = getSupabaseAdmin();
@@ -25,6 +29,7 @@ export async function GET(req: NextRequest) {
     .from('bookings')
     .select(VIEWING_COLUMNS)
     .eq('user_email', user.email)
+    .eq('property_id', propertyId)
     .eq('status', 'active')
     .maybeSingle();
 
@@ -35,7 +40,6 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ viewing: data });
 }
 
-// Book a slot — or move an existing booking to a new slot.
 export async function POST(req: NextRequest) {
   const user = await getAuthedUser(req);
   if (!user) {
@@ -45,8 +49,29 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const date = String(body.date || '');
   const slot = String(body.slot || '');
+  const propertyId = String(body.propertyId || (await getDefaultPropertyId()) || '');
 
-  const range = slotToUtcRange(date, slot);
+  if (!propertyId) {
+    return NextResponse.json({ error: 'No property specified.' }, { status: 400 });
+  }
+
+  const supabase = getSupabaseAdmin();
+
+  const { data: property, error: propError } = await supabase
+    .from('properties')
+    .select('time_slots, timezone')
+    .eq('id', propertyId)
+    .eq('status', 'published')
+    .maybeSingle();
+
+  if (propError) {
+    return NextResponse.json({ error: propError.message }, { status: 500 });
+  }
+  if (!property) {
+    return NextResponse.json({ error: 'Property not found.' }, { status: 404 });
+  }
+
+  const range = slotToUtcRange(date, slot, property.time_slots, property.timezone);
   if (!range) {
     return NextResponse.json({ error: 'Invalid date or time slot.' }, { status: 400 });
   }
@@ -57,12 +82,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const supabase = getSupabaseAdmin();
-
   const { data: existing, error: lookupError } = await supabase
     .from('bookings')
     .select('id, slot_start, slot_end')
     .eq('user_email', user.email)
+    .eq('property_id', propertyId)
     .eq('status', 'active')
     .maybeSingle();
 
@@ -70,7 +94,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: lookupError.message }, { status: 500 });
   }
 
-    if (existing && new Date(existing.slot_end).getTime() <= Date.now()) {
+  if (existing && new Date(existing.slot_end).getTime() <= Date.now()) {
     return NextResponse.json(
       { error: "Your viewing has already started, so it can't be rescheduled." },
       { status: 400 }
@@ -95,6 +119,7 @@ export async function POST(req: NextRequest) {
         .from('bookings')
         .insert({
           ...slotFields,
+          property_id: propertyId,
           user_email: user.email,
           user_name: user.name,
           access_code: generateAccessCode(),
@@ -104,7 +129,6 @@ export async function POST(req: NextRequest) {
         .single();
 
   if (error) {
-    // 23505 = unique violation: someone else grabbed this slot first.
     if (error.code === '23505') {
       return NextResponse.json(
         { error: 'That time slot was just taken. Please choose another.' },

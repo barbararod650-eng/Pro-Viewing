@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '@/lib/supabase-admin';
+import { getSupabaseAdmin, getDefaultPropertyId } from '@/lib/supabase-admin';
 import { getAuthedUser } from '@/lib/auth-server';
 
 export const runtime = 'nodejs';
@@ -7,15 +7,14 @@ export const dynamic = 'force-dynamic';
 
 type AccessState = 'no_booking' | 'unverified' | 'unpaid' | 'before' | 'during' | 'after';
 
-// Works out whether this person may see their code right now.
-// All checks happen here on the server, using the server's clock.
-async function evaluate(email: string) {
+async function evaluate(email: string, propertyId: string) {
   const supabase = getSupabaseAdmin();
 
   const { data: booking } = await supabase
     .from('bookings')
     .select('id, slot_start, slot_end, access_code, code_revealed_at')
     .eq('user_email', email)
+    .eq('property_id', propertyId)
     .eq('status', 'active')
     .maybeSingle();
 
@@ -36,6 +35,7 @@ async function evaluate(email: string) {
       .from('payment_requests')
       .select('status')
       .eq('user_email', email)
+      .eq('property_id', propertyId)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle(),
@@ -54,14 +54,18 @@ async function evaluate(email: string) {
   return { state, now, booking };
 }
 
-// Status only — this never includes the access code.
 export async function GET(req: NextRequest) {
   const user = await getAuthedUser(req);
   if (!user) {
     return NextResponse.json({ error: 'Please sign in.' }, { status: 401 });
   }
 
-  const { state, now, booking } = await evaluate(user.email);
+  const propertyId = req.nextUrl.searchParams.get('propertyId') || (await getDefaultPropertyId());
+  if (!propertyId) {
+    return NextResponse.json({ error: 'No property specified.' }, { status: 400 });
+  }
+
+  const { state, now, booking } = await evaluate(user.email, propertyId);
 
   return NextResponse.json({
     state,
@@ -71,14 +75,19 @@ export async function GET(req: NextRequest) {
   });
 }
 
-// Reveals the code — only when verified, paid, and inside the viewing window.
 export async function POST(req: NextRequest) {
   const user = await getAuthedUser(req);
   if (!user) {
     return NextResponse.json({ error: 'Please sign in.' }, { status: 401 });
   }
 
-  const { state, booking } = await evaluate(user.email);
+  const body = await req.json().catch(() => ({}));
+  const propertyId = String(body.propertyId || (await getDefaultPropertyId()) || '');
+  if (!propertyId) {
+    return NextResponse.json({ error: 'No property specified.' }, { status: 400 });
+  }
+
+  const { state, booking } = await evaluate(user.email, propertyId);
 
   if (state !== 'during' || !booking) {
     const messages: Record<AccessState, string> = {
@@ -92,7 +101,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: messages[state], state }, { status: 403 });
   }
 
-  // Remember the first time the code was viewed (useful for the admin).
   if (!booking.code_revealed_at) {
     await getSupabaseAdmin()
       .from('bookings')

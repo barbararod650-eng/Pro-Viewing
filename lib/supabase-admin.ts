@@ -16,3 +16,19 @@ export function getSupabaseAdmin() {
     auth: { persistSession: false },
   });
 }
+
+
+// Used when a request doesn't specify which property it's about (e.g. old
+// frontend code that predates multi-property support). Falls back to the
+// earliest published listing, so nothing breaks mid-migration.
+export async function getDefaultPropertyId(): Promise<string | null> {
+  const supabase = getSupabaseAdmin();
+  const { data } = await supabase
+    .from('properties')
+    .select('id')
+    .eq('status', 'published')
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  return data?.id ?? null;
+}
