@@ -37,6 +37,14 @@ export const TIME_SLOTS = [
 
 export const INSPECTION_FEE = 25;
 
+
+
+// Timezone the property is located in. Viewing time slots (e.g. "9:00 AM")
+// are interpreted in this timezone, no matter where the visitor's browser is.
+// Change this if your property isn't in Portland, OR.
+// List of valid names: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+export const PROPERTY_TIMEZONE = 'America/Los_Angeles';
+
 export function getMockViewingWindow(): { start: Date; end: Date } {
   const start = new Date();
   start.setMinutes(start.getMinutes() + 10);

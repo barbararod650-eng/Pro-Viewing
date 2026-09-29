@@ -13,6 +13,15 @@ export interface ViewingBooking {
   accessCode: string;
 }
 
+// A viewing that's saved in the database (never includes the access code).
+export interface Viewing {
+  id: string;
+  slot_date: string; // "2026-10-05", the calendar date at the property
+  slot_label: string; // "9:00 AM – 9:30 AM"
+  slot_start: string; // ISO timestamp
+  slot_end: string; // ISO timestamp
+}
+
 export interface AuthUser {
   email: string;
   name: string;
@@ -33,42 +42,43 @@ export interface AppState {
   authLoading: boolean;
   verification: VerificationState;
   payment: PaymentState;
+  viewing: Viewing | null;
+  viewingLoaded: boolean;
   refreshStatus: () => Promise<void>;
   booking: ViewingBooking;
   signUp: (email: string, password: string, name: string) => Promise<{ error: string | null; needsEmailConfirmation: boolean }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   logout: () => Promise<void>;
-  scheduleViewing: (date: string, timeSlot: string) => void;
+  scheduleViewing: (dateStr: string, timeSlot: string) => void;
   setVerified: () => void;
   setPaid: () => void;
   resetBooking: () => void;
 }
 
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase-client';
+import { authFetch } from '@/lib/auth-fetch';
 import type { Session } from '@supabase/supabase-js';
 
-const BOOKING_STORAGE_KEY = 'keyview_booking_v1';
+// Holds a time slot picked BEFORE signing in. Once the person signs in,
+// it's saved to the database and this is cleared.
+const PENDING_STORAGE_KEY = 'keyview_pending_slot_v2';
 
-function generateAccessCode(): string {
-  return Math.floor(1000 + Math.random() * 9000).toString();
-}
-
-const defaultBooking: ViewingBooking = {
+const emptyBooking: ViewingBooking = {
   status: 'idle',
   date: null,
   timeSlot: null,
-  accessCode: '8492',
+  accessCode: '',
 };
 
-function loadBooking(): ViewingBooking {
-  if (typeof window === 'undefined') return defaultBooking;
+function loadPending(): ViewingBooking {
+  if (typeof window === 'undefined') return emptyBooking;
   try {
-    const raw = localStorage.getItem(BOOKING_STORAGE_KEY);
-    if (!raw) return defaultBooking;
+    const raw = localStorage.getItem(PENDING_STORAGE_KEY);
+    if (!raw) return emptyBooking;
     return JSON.parse(raw);
   } catch {
-    return defaultBooking;
+    return emptyBooking;
   }
 }
 
@@ -85,23 +95,63 @@ const AppContext = createContext<AppState | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [booking, setBooking] = useState<ViewingBooking>(defaultBooking);
+  const [pending, setPending] = useState<ViewingBooking>(emptyBooking);
   const [hydrated, setHydrated] = useState(false);
   const [verification, setVerification] = useState<VerificationState>('unknown');
   const [payment, setPayment] = useState<PaymentState>('unknown');
+  const [viewing, setViewing] = useState<Viewing | null>(null);
+  const [viewingLoaded, setViewingLoaded] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const email = user?.email;
+
+  const pendingRef = useRef(pending);
+  pendingRef.current = pending;
+  const claimingRef = useRef(false);
 
   const refreshStatus = useCallback(async () => {
     if (!email) return;
     try {
-      const [vRes, pRes] = await Promise.all([
+      const [vRes, pRes, bRes] = await Promise.all([
         fetch(`/api/verify/status?email=${encodeURIComponent(email)}`),
         fetch(`/api/payment/status?email=${encodeURIComponent(email)}`),
+        authFetch('/api/booking'),
       ]);
       const v = await vRes.json();
       const p = await pRes.json();
       setVerification(v.verification?.status ?? 'none');
       setPayment(p.paymentRequest?.status ?? 'none');
+
+      if (!bRes.ok) return;
+      const b = await bRes.json();
+      let current: Viewing | null = b.viewing ?? null;
+
+      // A slot was picked before sign-in? Save it to the database now.
+      const chosen = pendingRef.current;
+      if (!current && chosen.date && chosen.timeSlot) {
+        if (claimingRef.current) return; // another refresh is already doing this
+        claimingRef.current = true;
+        try {
+          const claim = await authFetch('/api/booking', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ date: chosen.date.slice(0, 10), slot: chosen.timeSlot }),
+          });
+          const c = await claim.json();
+          if (claim.ok) {
+            current = c.viewing;
+          } else {
+            setNotice(
+              `${c.error || "We couldn't reserve the time you picked."} Please choose a new time from your dashboard.`
+            );
+          }
+        } finally {
+          claimingRef.current = false;
+          setPending(emptyBooking);
+        }
+      }
+
+      setViewing(current);
+      setViewingLoaded(true);
     } catch {
       // keep whatever we had on a transient network error
     }
@@ -113,20 +163,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } else {
       setVerification('unknown');
       setPayment('unknown');
+      setViewing(null);
+      setViewingLoaded(false);
     }
   }, [email, refreshStatus]);
 
   useEffect(() => {
-    setBooking(loadBooking());
+    setPending(loadPending());
     setHydrated(true);
 
+    // Keep the same user object if nothing changed, so pages don't re-run
+    // their effects every time Supabase re-confirms the session.
+    const applySession = (session: Session | null) => {
+      const next = userFromSession(session);
+      setUser((prev) =>
+        prev && next && prev.email === next.email && prev.name === next.name ? prev : next
+      );
+    };
+
     supabase.auth.getSession().then(({ data }) => {
-      setUser(userFromSession(data.session));
+      applySession(data.session);
       setAuthLoading(false);
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(userFromSession(session));
+      applySession(session);
     });
 
     return () => listener.subscription.unsubscribe();
@@ -134,8 +195,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!hydrated) return;
-    localStorage.setItem(BOOKING_STORAGE_KEY, JSON.stringify(booking));
-  }, [booking, hydrated]);
+    localStorage.setItem(PENDING_STORAGE_KEY, JSON.stringify(pending));
+  }, [pending, hydrated]);
 
   const signUp = async (email: string, password: string, name: string) => {
     const { data, error } = await supabase.auth.signUp({
@@ -150,8 +211,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     if (error) return { error: error.message, needsEmailConfirmation: false };
 
-    // If Supabase returns a session immediately, email confirmation is OFF
-    // for this project and the user is already logged in.
     const needsEmailConfirmation = !data.session;
     return { error: null, needsEmailConfirmation };
   };
@@ -164,26 +223,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     await supabase.auth.signOut();
-    setBooking(defaultBooking);
+    setPending(emptyBooking);
+    setViewing(null);
+    setViewingLoaded(false);
   };
 
-  const scheduleViewing = (date: string, timeSlot: string) => {
-    setBooking((prev) => ({
-      ...prev,
+  // Used only while signed out: remembers the picked slot until sign-in.
+  const scheduleViewing = (dateStr: string, timeSlot: string) => {
+    setPending({
       status: 'scheduled',
-      date,
+      date: `${dateStr}T12:00:00Z`,
       timeSlot,
-      accessCode: prev.accessCode || generateAccessCode(),
-    }));
+      accessCode: '',
+    });
   };
 
-  const setVerified = () =>
-    setBooking((prev) => ({ ...prev, status: 'verified' }));
+  // Verification and payment now come from the database, so these are no-ops.
+  const setVerified = useCallback(() => {}, []);
+  const setPaid = useCallback(() => {}, []);
 
-  const setPaid = () =>
-    setBooking((prev) => ({ ...prev, status: 'paid' }));
+  const resetBooking = () => setPending(emptyBooking);
 
-  const resetBooking = () => setBooking(defaultBooking);
+  const booking: ViewingBooking = !user
+    ? pending
+    : viewing
+      ? {
+          status:
+            payment === 'confirmed' ? 'paid' : verification === 'approved' ? 'verified' : 'scheduled',
+          date: `${viewing.slot_date}T12:00:00Z`,
+          timeSlot: viewing.slot_label,
+          accessCode: '',
+        }
+      : viewingLoaded
+        ? emptyBooking
+        : pending;
 
   return (
     <AppContext.Provider
@@ -192,6 +265,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         authLoading,
         verification,
         payment,
+        viewing,
+        viewingLoaded,
         refreshStatus,
         booking,
         signUp,
@@ -204,6 +279,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
+      {notice && (
+        <div className="fixed bottom-4 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-lg border border-destructive/30 bg-card px-4 py-3 text-sm shadow-lg">
+          <p className="text-primary">{notice}</p>
+          <button
+            onClick={() => setNotice(null)}
+            className="mt-2 text-xs font-medium text-muted-foreground underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
     </AppContext.Provider>
   );
 }
