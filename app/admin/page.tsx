@@ -11,6 +11,10 @@ import {
   Send,
   FileCheck,
   Wallet,
+  Building2,
+  Eye,
+  EyeOff,
+  Archive,
 } from 'lucide-react';
 
 // ── Types ──
@@ -36,6 +40,16 @@ interface PaymentRequest {
   created_at: string;
 }
 
+interface Property {
+  id: string;
+  name: string;
+  address: string;
+  price: number;
+  status: 'draft' | 'published' | 'archived';
+  image_url: string | null;
+  created_at: string;
+}
+
 const methodLabels: Record<string, string> = {
   revolut: 'Revolut',
   wero: 'Wero',
@@ -43,7 +57,7 @@ const methodLabels: Record<string, string> = {
   paypal: 'PayPal',
 };
 
-type Tab = 'verifications' | 'payments';
+type Tab = 'verifications' | 'payments' | 'properties';
 
 export default function AdminPage() {
   const [password, setPassword] = useState('');
@@ -58,7 +72,11 @@ export default function AdminPage() {
   const [payLoading, setPayLoading] = useState(false);
   const [payments, setPayments] = useState<PaymentRequest[]>([]);
   const [payActingOn, setPayActingOn] = useState<string | null>(null);
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+    const [drafts, setDrafts] = useState<Record<string, string>>({});
+
+  const [propLoading, setPropLoading] = useState(false);
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [propActingOn, setPropActingOn] = useState<string | null>(null);
 
   useEffect(() => {
     const saved = sessionStorage.getItem('admin_password');
@@ -72,6 +90,7 @@ export default function AdminPage() {
     if (!authed) return;
     fetchVerifications();
     fetchPayments();
+    fetchProperties();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed]);
 
@@ -135,6 +154,35 @@ export default function AdminPage() {
       }
     } finally {
       setVerActingOn(null);
+    }
+  }
+  async function fetchProperties() {
+    setPropLoading(true);
+    try {
+      const res = await fetch('/api/admin/properties', {
+        headers: { 'x-admin-password': password },
+      });
+      if (res.status === 401) return handleAuthFailure();
+      const data = await res.json();
+      setProperties(data.properties || []);
+    } catch {
+      // ignore transient errors, user can hit refresh
+    } finally {
+      setPropLoading(false);
+    }
+  }
+
+  async function handlePropertyStatusChange(id: string, status: 'draft' | 'published' | 'archived') {
+    setPropActingOn(id);
+    try {
+      const res = await fetch(`/api/admin/properties/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) await fetchProperties();
+    } finally {
+      setPropActingOn(null);
     }
   }
 
@@ -220,7 +268,107 @@ export default function AdminPage() {
             </span>
           )}
         </button>
+        <button
+          onClick={() => setTab('properties')}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-md py-2 text-sm font-medium transition-colors ${
+            tab === 'properties' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'
+          }`}
+        >
+          <Building2 className="h-4 w-4" />
+          Properties
+        </button>
       </div>
+
+      {tab === 'properties' && (
+        <div>
+          <div className="mb-4 flex justify-end">
+            <Button variant="outline" size="sm" onClick={fetchProperties} disabled={propLoading}>
+              <RefreshCw className={`mr-1.5 h-4 w-4 ${propLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
+
+          {properties.length === 0 && !propLoading && (
+            <p className="rounded-lg border border-dashed border-border p-8 text-center text-muted-foreground">
+              No properties yet.
+            </p>
+          )}
+
+          <div className="space-y-3">
+            {properties.map((property) => (
+              <div
+                key={property.id}
+                className="flex items-center justify-between gap-4 rounded-xl border border-border bg-card p-4 shadow-sm"
+              >
+                <div className="flex items-center gap-3">
+                  {property.image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={property.image_url}
+                      alt={property.name}
+                      className="h-14 w-14 rounded-lg object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-secondary">
+                      <Building2 className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div>
+                    <p className="font-medium text-primary">{property.name}</p>
+                    <p className="text-sm text-muted-foreground">{property.address}</p>
+                    <span
+                      className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+                        property.status === 'published'
+                          ? 'bg-accent/10 text-accent'
+                          : property.status === 'draft'
+                            ? 'bg-secondary text-muted-foreground'
+                            : 'bg-destructive/10 text-destructive'
+                      }`}
+                    >
+                      {property.status}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  {property.status !== 'published' && (
+                    <Button
+                      size="sm"
+                      onClick={() => handlePropertyStatusChange(property.id, 'published')}
+                      disabled={propActingOn === property.id}
+                      className="bg-accent text-accent-foreground hover:bg-accent/90"
+                    >
+                      <Eye className="mr-1.5 h-4 w-4" />
+                      Publish
+                    </Button>
+                  )}
+                  {property.status === 'published' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handlePropertyStatusChange(property.id, 'draft')}
+                      disabled={propActingOn === property.id}
+                    >
+                      <EyeOff className="mr-1.5 h-4 w-4" />
+                      Unpublish
+                    </Button>
+                  )}
+                  {property.status !== 'archived' && (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => handlePropertyStatusChange(property.id, 'archived')}
+                      disabled={propActingOn === property.id}
+                    >
+                      <Archive className="mr-1.5 h-4 w-4" />
+                      Archive
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {tab === 'verifications' && (
         <div>
