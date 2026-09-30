@@ -78,6 +78,24 @@ export default function AdminPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [propActingOn, setPropActingOn] = useState<string | null>(null);
 
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newAddress, setNewAddress] = useState('');
+  const [newDescription, setNewDescription] = useState('');
+  const [newPrice, setNewPrice] = useState('');
+  const [newFee, setNewFee] = useState('25');
+  const [newBeds, setNewBeds] = useState('');
+  const [newBaths, setNewBaths] = useState('');
+  const [newSqft, setNewSqft] = useState('');
+  const [newAmenities, setNewAmenities] = useState('');
+  const [newImageUrl, setNewImageUrl] = useState<string | null>(null);
+  const [newGalleryUrls, setNewGalleryUrls] = useState<string[]>([]);
+  const [newVerified, setNewVerified] = useState(true);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [uploadingGallery, setUploadingGallery] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
+
   useEffect(() => {
     const saved = sessionStorage.getItem('admin_password');
     if (saved) {
@@ -185,6 +203,94 @@ export default function AdminPage() {
       setPropActingOn(null);
     }
   }
+  async function uploadPropertyImage(file: File): Promise<string | null> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch('/api/admin/properties/upload-image', {
+      method: 'POST',
+      headers: { 'x-admin-password': password },
+      body: formData,
+    });
+    const data = await res.json();
+    return res.ok ? data.url : null;
+  }
+
+  async function handleCoverUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingCover(true);
+    const url = await uploadPropertyImage(file);
+    if (url) setNewImageUrl(url);
+    setUploadingCover(false);
+  }
+
+  async function handleGalleryUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    setUploadingGallery(true);
+    const urls = await Promise.all(files.map(uploadPropertyImage));
+    setNewGalleryUrls((prev) => [...prev, ...urls.filter((u): u is string => !!u)]);
+    setUploadingGallery(false);
+  }
+
+  function resetForm() {
+    setNewName('');
+    setNewAddress('');
+    setNewDescription('');
+    setNewPrice('');
+    setNewFee('25');
+    setNewBeds('');
+    setNewBaths('');
+    setNewSqft('');
+    setNewAmenities('');
+    setNewImageUrl(null);
+    setNewGalleryUrls([]);
+    setNewVerified(true);
+    setCreateError('');
+  }
+
+  async function handleCreateProperty() {
+    if (!newName.trim() || !newAddress.trim()) {
+      setCreateError('Name and address are required.');
+      return;
+    }
+    setCreating(true);
+    setCreateError('');
+    try {
+      const res = await fetch('/api/admin/properties', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({
+          name: newName.trim(),
+          address: newAddress.trim(),
+          description: newDescription.trim(),
+          price: Number(newPrice) || 0,
+          inspection_fee: Number(newFee) || 25,
+          beds: Number(newBeds) || 0,
+          baths: Number(newBaths) || 0,
+          sqft: Number(newSqft) || 0,
+          amenities: newAmenities
+            .split(',')
+            .map((a) => a.trim())
+            .filter(Boolean),
+          image_url: newImageUrl,
+          gallery_images: newGalleryUrls,
+          verified: newVerified,
+          status: 'draft',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setCreateError(data.error || 'Something went wrong.');
+        return;
+      }
+      resetForm();
+      setShowAddForm(false);
+      await fetchProperties();
+    } finally {
+      setCreating(false);
+    }
+  }
 
   async function handlePaymentAction(id: string, action: 'assign' | 'confirm' | 'cancel') {
     setPayActingOn(id);
@@ -281,12 +387,155 @@ export default function AdminPage() {
 
       {tab === 'properties' && (
         <div>
-          <div className="mb-4 flex justify-end">
+          <div className="mb-4 flex justify-end gap-2">
             <Button variant="outline" size="sm" onClick={fetchProperties} disabled={propLoading}>
               <RefreshCw className={`mr-1.5 h-4 w-4 ${propLoading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
+            <Button size="sm" onClick={() => setShowAddForm((v) => !v)}>
+              <Building2 className="mr-1.5 h-4 w-4" />
+              {showAddForm ? 'Cancel' : 'Add Property'}
+            </Button>
           </div>
+
+          {showAddForm && (
+            <div className="mb-6 rounded-xl border border-border bg-card p-5 shadow-sm">
+              <h3 className="mb-4 font-semibold text-primary">New listing</h3>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <input
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="Property name"
+                  className="rounded-md border border-border bg-background px-3 py-2 text-sm sm:col-span-2"
+                />
+                <input
+                  value={newAddress}
+                  onChange={(e) => setNewAddress(e.target.value)}
+                  placeholder="Address"
+                  className="rounded-md border border-border bg-background px-3 py-2 text-sm sm:col-span-2"
+                />
+                <textarea
+                  value={newDescription}
+                  onChange={(e) => setNewDescription(e.target.value)}
+                  placeholder="Description"
+                  rows={3}
+                  className="rounded-md border border-border bg-background px-3 py-2 text-sm sm:col-span-2"
+                />
+                <input
+                  value={newPrice}
+                  onChange={(e) => setNewPrice(e.target.value)}
+                  placeholder="Monthly rent ($)"
+                  type="number"
+                  className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+                />
+                <input
+                  value={newFee}
+                  onChange={(e) => setNewFee(e.target.value)}
+                  placeholder="Inspection fee ($)"
+                  type="number"
+                  className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+                />
+                <input
+                  value={newBeds}
+                  onChange={(e) => setNewBeds(e.target.value)}
+                  placeholder="Beds"
+                  type="number"
+                  className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+                />
+                <input
+                  value={newBaths}
+                  onChange={(e) => setNewBaths(e.target.value)}
+                  placeholder="Baths"
+                  type="number"
+                  className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+                />
+                <input
+                  value={newSqft}
+                  onChange={(e) => setNewSqft(e.target.value)}
+                  placeholder="Square feet"
+                  type="number"
+                  className="rounded-md border border-border bg-background px-3 py-2 text-sm sm:col-span-2"
+                />
+                <input
+                  value={newAmenities}
+                  onChange={(e) => setNewAmenities(e.target.value)}
+                  placeholder="Amenities, comma separated (e.g. Parking, Pet Friendly)"
+                  className="rounded-md border border-border bg-background px-3 py-2 text-sm sm:col-span-2"
+                />
+              </div>
+
+              <div className="mt-4">
+                <p className="mb-1.5 text-sm font-medium text-primary">Cover photo</p>
+                <div className="flex items-center gap-3">
+                  {newImageUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={newImageUrl} alt="Cover" className="h-16 w-16 rounded-lg object-cover" />
+                  )}
+                  <input type="file" accept="image/*" onChange={handleCoverUpload} className="text-sm" />
+                  {uploadingCover && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <p className="mb-1.5 text-sm font-medium text-primary">Gallery photos</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  {newGalleryUrls.map((url, i) => (
+                    <div key={i} className="relative">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt={`Gallery ${i + 1}`} className="h-14 w-14 rounded-lg object-cover" />
+                      <button
+                        onClick={() => setNewGalleryUrls((prev) => prev.filter((_, idx) => idx !== i))}
+                        className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-xs text-destructive-foreground"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleGalleryUpload}
+                  className="mt-2 text-sm"
+                />
+                {uploadingGallery && <Loader2 className="mt-1 h-4 w-4 animate-spin text-muted-foreground" />}
+              </div>
+
+              <label className="mt-4 flex items-center gap-2 text-sm text-primary">
+                <input
+                  type="checkbox"
+                  checked={newVerified}
+                  onChange={(e) => setNewVerified(e.target.checked)}
+                />
+                Show "Verified by our team" badge on this listing
+              </label>
+
+              {createError && (
+                <p className="mt-3 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  {createError}
+                </p>
+              )}
+
+              <Button
+                onClick={handleCreateProperty}
+                disabled={creating || uploadingCover || uploadingGallery}
+                className="mt-4 w-full bg-accent text-accent-foreground hover:bg-accent/90"
+              >
+                {creating ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Creating...
+                  </span>
+                ) : (
+                  'Create as draft'
+                )}
+              </Button>
+              <p className="mt-2 text-center text-xs text-muted-foreground">
+                It's saved as a draft — publish it from the list below once you're happy with it.
+              </p>
+            </div>
+          )}
 
           {properties.length === 0 && !propLoading && (
             <p className="rounded-lg border border-dashed border-border p-8 text-center text-muted-foreground">
