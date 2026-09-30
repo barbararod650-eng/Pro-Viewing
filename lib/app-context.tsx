@@ -11,11 +11,13 @@ export interface ViewingBooking {
   date: string | null;
   timeSlot: string | null;
   accessCode: string;
+  propertyId: string | null;
 }
 
 // A viewing that's saved in the database (never includes the access code).
 export interface Viewing {
   id: string;
+  property_id: string;
   slot_date: string; // "2026-10-05", the calendar date at the property
   slot_label: string; // "9:00 AM – 9:30 AM"
   slot_start: string; // ISO timestamp
@@ -49,7 +51,7 @@ export interface AppState {
   signUp: (email: string, password: string, name: string) => Promise<{ error: string | null; needsEmailConfirmation: boolean }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   logout: () => Promise<void>;
-  scheduleViewing: (dateStr: string, timeSlot: string) => void;
+  scheduleViewing: (dateStr: string, timeSlot: string, propertyId: string) => void;
   setVerified: () => void;
   setPaid: () => void;
   resetBooking: () => void;
@@ -60,8 +62,6 @@ import { supabase } from '@/lib/supabase-client';
 import { authFetch } from '@/lib/auth-fetch';
 import type { Session } from '@supabase/supabase-js';
 
-// Holds a time slot picked BEFORE signing in. Once the person signs in,
-// it's saved to the database and this is cleared.
 const PENDING_STORAGE_KEY = 'keyview_pending_slot_v2';
 
 const emptyBooking: ViewingBooking = {
@@ -69,6 +69,7 @@ const emptyBooking: ViewingBooking = {
   date: null,
   timeSlot: null,
   accessCode: '',
+  propertyId: null,
 };
 
 function loadPending(): ViewingBooking {
@@ -125,16 +126,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const b = await bRes.json();
       let current: Viewing | null = b.viewing ?? null;
 
-      // A slot was picked before sign-in? Save it to the database now.
       const chosen = pendingRef.current;
-      if (!current && chosen.date && chosen.timeSlot) {
-        if (claimingRef.current) return; // another refresh is already doing this
+      if (!current && chosen.date && chosen.timeSlot && chosen.propertyId) {
+        if (claimingRef.current) return;
         claimingRef.current = true;
         try {
           const claim = await authFetch('/api/booking', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ date: chosen.date.slice(0, 10), slot: chosen.timeSlot }),
+            body: JSON.stringify({
+              date: chosen.date.slice(0, 10),
+              slot: chosen.timeSlot,
+              propertyId: chosen.propertyId,
+            }),
           });
           const c = await claim.json();
           if (claim.ok) {
@@ -172,8 +176,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPending(loadPending());
     setHydrated(true);
 
-    // Keep the same user object if nothing changed, so pages don't re-run
-    // their effects every time Supabase re-confirms the session.
     const applySession = (session: Session | null) => {
       const next = userFromSession(session);
       setUser((prev) =>
@@ -228,17 +230,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setViewingLoaded(false);
   };
 
-  // Used only while signed out: remembers the picked slot until sign-in.
-  const scheduleViewing = (dateStr: string, timeSlot: string) => {
+  const scheduleViewing = (dateStr: string, timeSlot: string, propertyId: string) => {
     setPending({
       status: 'scheduled',
       date: `${dateStr}T12:00:00Z`,
       timeSlot,
       accessCode: '',
+      propertyId,
     });
   };
 
-  // Verification and payment now come from the database, so these are no-ops.
   const setVerified = useCallback(() => {}, []);
   const setPaid = useCallback(() => {}, []);
 
@@ -253,6 +254,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           date: `${viewing.slot_date}T12:00:00Z`,
           timeSlot: viewing.slot_label,
           accessCode: '',
+          propertyId: viewing.property_id,
         }
       : viewingLoaded
         ? emptyBooking

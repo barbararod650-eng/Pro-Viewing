@@ -33,6 +33,8 @@ interface PropertyDetail {
   amenities: string[];
   image_url: string | null;
   gallery_images: string[];
+  time_slots: string[];
+  timezone: string;
   verified: boolean;
 }
 
@@ -244,7 +246,14 @@ export default function PropertyDetailPage() {
         </div>
       </section>
 
-      <ScheduleModal open={scheduleOpen} onOpenChange={setScheduleOpen} />
+          <ScheduleModal
+        open={scheduleOpen}
+        onOpenChange={setScheduleOpen}
+        propertyId={property.id}
+        timeSlots={property.time_slots}
+        timezone={property.timezone}
+        propertyName={property.name}
+      />
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { useApp } from '@/lib/app-context';
 import { authFetch } from '@/lib/auth-fetch';
 import { PROPERTY } from '@/lib/property';
 import { ScheduleModal } from '@/components/schedule-modal';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Calendar,
@@ -58,7 +59,23 @@ export default function DashboardPage() {
   const [now, setNow] = useState(Date.now());
   const [code, setCode] = useState<string | null>(null);
   const [codeVisible, setCodeVisible] = useState(false);
-  const [scheduleOpen, setScheduleOpen] = useState(false);
+    const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [propertyInfo, setPropertyInfo] = useState<{
+    name: string;
+    time_slots: string[];
+    timezone: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!viewing) {
+      setPropertyInfo(null);
+      return;
+    }
+    fetch(`/api/properties/${viewing.property_id}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setPropertyInfo(data?.property ?? null))
+      .catch(() => setPropertyInfo(null));
+  }, [viewing]);
   const revealingRef = useRef(false);
 
   useEffect(() => {
@@ -170,9 +187,11 @@ export default function DashboardPage() {
           <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
             Pick a date and time to get started.
           </p>
-          <Button className="mt-6 bg-accent text-accent-foreground hover:bg-accent/90" onClick={() => setScheduleOpen(true)}>
-            <Calendar className="mr-1.5 h-4 w-4" />
-            Schedule a Viewing
+                    <Button asChild className="mt-6 bg-accent text-accent-foreground hover:bg-accent/90">
+            <Link href="/">
+              <Calendar className="mr-1.5 h-4 w-4" />
+              Browse Properties
+            </Link>
           </Button>
         </motion.div>
       )}
@@ -441,7 +460,16 @@ export default function DashboardPage() {
         </div>
       </motion.div>
 
-      <ScheduleModal open={scheduleOpen} onOpenChange={setScheduleOpen} />
+            {viewing && propertyInfo && (
+        <ScheduleModal
+          open={scheduleOpen}
+          onOpenChange={setScheduleOpen}
+          propertyId={viewing.property_id}
+          timeSlots={propertyInfo.time_slots}
+          timezone={propertyInfo.timezone}
+          propertyName={propertyInfo.name}
+        />
+      )}
     </div>
   );
 }
