@@ -15,6 +15,8 @@ import {
   Eye,
   EyeOff,
   Archive,
+  Mail,
+  Phone,
 } from 'lucide-react';
 
 // ── Types ──
@@ -50,6 +52,17 @@ interface Property {
   created_at: string;
 }
 
+interface Inquiry {
+  id: string;
+  landlord_name: string;
+  landlord_email: string;
+  landlord_phone: string | null;
+  property_address: string;
+  property_details: string;
+  status: 'new' | 'contacted' | 'approved' | 'declined';
+  created_at: string;
+}
+
 const methodLabels: Record<string, string> = {
   revolut: 'Revolut',
   wero: 'Wero',
@@ -57,7 +70,7 @@ const methodLabels: Record<string, string> = {
   paypal: 'PayPal',
 };
 
-type Tab = 'verifications' | 'payments' | 'properties';
+type Tab = 'verifications' | 'payments' | 'properties' | 'inquiries';
 
 export default function AdminPage() {
   const [password, setPassword] = useState('');
@@ -96,6 +109,10 @@ export default function AdminPage() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
 
+  const [inqLoading, setInqLoading] = useState(false);
+  const [inquiries, setInquiries] = useState<Inquiry[]>([]);
+  const [inqActingOn, setInqActingOn] = useState<string | null>(null);
+
   useEffect(() => {
     const saved = sessionStorage.getItem('admin_password');
     if (saved) {
@@ -109,6 +126,7 @@ export default function AdminPage() {
     fetchVerifications();
     fetchPayments();
     fetchProperties();
+    fetchInquiries();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed]);
 
@@ -291,6 +309,38 @@ export default function AdminPage() {
       setCreating(false);
     }
   }
+  async function fetchInquiries() {
+    setInqLoading(true);
+    try {
+      const res = await fetch('/api/admin/landlord-inquiries', {
+        headers: { 'x-admin-password': password },
+      });
+      if (res.status === 401) return handleAuthFailure();
+      const data = await res.json();
+      setInquiries(data.inquiries || []);
+    } catch {
+      // ignore transient errors, user can hit refresh
+    } finally {
+      setInqLoading(false);
+    }
+  }
+
+  async function handleInquiryStatusChange(
+    id: string,
+    status: 'new' | 'contacted' | 'approved' | 'declined'
+  ) {
+    setInqActingOn(id);
+    try {
+      const res = await fetch(`/api/admin/landlord-inquiries/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) await fetchInquiries();
+    } finally {
+      setInqActingOn(null);
+    }
+  }
 
   async function handlePaymentAction(id: string, action: 'assign' | 'confirm' | 'cancel') {
     setPayActingOn(id);
@@ -383,7 +433,119 @@ export default function AdminPage() {
           <Building2 className="h-4 w-4" />
           Properties
         </button>
+        <button
+          onClick={() => setTab('inquiries')}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-md py-2 text-sm font-medium transition-colors ${
+            tab === 'inquiries' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'
+          }`}
+        >
+          <Mail className="h-4 w-4" />
+          Inquiries
+          {inquiries.filter((i) => i.status === 'new').length > 0 && (
+            <span className="rounded-full bg-accent px-1.5 text-xs text-accent-foreground">
+              {inquiries.filter((i) => i.status === 'new').length}
+            </span>
+          )}
+        </button>
       </div>
+
+      {tab === 'inquiries' && (
+        <div>
+          <div className="mb-4 flex justify-end">
+            <Button variant="outline" size="sm" onClick={fetchInquiries} disabled={inqLoading}>
+              <RefreshCw className={`mr-1.5 h-4 w-4 ${inqLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
+
+          {inquiries.length === 0 && !inqLoading && (
+            <p className="rounded-lg border border-dashed border-border p-8 text-center text-muted-foreground">
+              No landlord inquiries yet.
+            </p>
+          )}
+
+          <div className="space-y-4">
+            {inquiries.map((inquiry) => (
+              <div key={inquiry.id} className="rounded-xl border border-border bg-card p-5 shadow-sm">
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-medium text-primary">{inquiry.landlord_name}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Mail className="h-3.5 w-3.5" />
+                        {inquiry.landlord_email}
+                      </span>
+                      {inquiry.landlord_phone && (
+                        <span className="flex items-center gap-1">
+                          <Phone className="h-3.5 w-3.5" />
+                          {inquiry.landlord_phone}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <span
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
+                      inquiry.status === 'new'
+                        ? 'bg-accent/10 text-accent'
+                        : inquiry.status === 'approved'
+                          ? 'bg-accent/10 text-accent'
+                          : inquiry.status === 'declined'
+                            ? 'bg-destructive/10 text-destructive'
+                            : 'bg-secondary text-muted-foreground'
+                    }`}
+                  >
+                    {inquiry.status}
+                  </span>
+                </div>
+
+                <p className="text-sm font-medium text-primary">{inquiry.property_address}</p>
+                {inquiry.property_details && (
+                  <p className="mt-1 text-sm text-muted-foreground">{inquiry.property_details}</p>
+                )}
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {inquiry.status !== 'contacted' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleInquiryStatusChange(inquiry.id, 'contacted')}
+                      disabled={inqActingOn === inquiry.id}
+                    >
+                      Mark Contacted
+                    </Button>
+                  )}
+                  {inquiry.status !== 'approved' && (
+                    <Button
+                      size="sm"
+                      onClick={() => handleInquiryStatusChange(inquiry.id, 'approved')}
+                      disabled={inqActingOn === inquiry.id}
+                      className="bg-accent text-accent-foreground hover:bg-accent/90"
+                    >
+                      Approve
+                    </Button>
+                  )}
+                  {inquiry.status !== 'declined' && (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => handleInquiryStatusChange(inquiry.id, 'declined')}
+                      disabled={inqActingOn === inquiry.id}
+                    >
+                      Decline
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <p className="mt-6 text-xs text-muted-foreground">
+            Approving an inquiry doesn't create a listing automatically — once you've approved one,
+            use the "Add Property" button in the Properties tab to create the real listing using the
+            details above.
+          </p>
+        </div>
+      )}
 
       {tab === 'properties' && (
         <div>
