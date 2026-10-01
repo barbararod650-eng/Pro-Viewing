@@ -19,6 +19,7 @@ import {
   Sparkles,
   Loader2,
 } from 'lucide-react';
+import { formatMoney } from '@/lib/utils';
 
 interface PropertyDetail {
   id: string;
@@ -26,6 +27,7 @@ interface PropertyDetail {
   address: string;
   description: string;
   price: number;
+  currency: string;
   inspection_fee: number;
   beds: number;
   baths: number;
@@ -118,7 +120,7 @@ export default function PropertyDetailPage() {
                   Schedule Viewing
                 </Button>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-3xl font-bold text-primary">${property.price.toLocaleString()}</span>
+                  <span className="text-3xl font-bold text-primary">{formatMoney(property.price, property.currency)}</span>
                   <span className="text-muted-foreground">/month</span>
                 </div>
               </div>
@@ -214,7 +216,7 @@ export default function PropertyDetailPage() {
           <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
             {[
               { icon: Calendar, title: '1. Schedule', desc: 'Pick a date and time for your property viewing.' },
-              { icon: ShieldCheck, title: '2. Verify & Pay', desc: `Confirm your identity and pay the $${property.inspection_fee} inspection fee.` },
+              { icon: ShieldCheck, title: '2. Verify & Pay', desc: `Confirm your identity and pay the ${formatMoney(property.inspection_fee, property.currency)} inspection fee.` },
               { icon: Lock, title: '3. Access', desc: 'Get your time-gated access code revealed only during the viewing window.' },
             ].map((step) => (
               <div key={step.title} className="flex flex-col items-center text-center">

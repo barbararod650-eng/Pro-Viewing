@@ -9,7 +9,8 @@ import { useState } from 'react';
 import { cn } from '@/lib/utils';
 
 const navLinks = [
-  { href: '/', label: 'Property' },
+  { href: '/', label: 'Properties' },
+  { href: '/list-your-property', label: 'List Yours' },
   { href: '/auth', label: 'Sign In' },
   { href: '/verify', label: 'Verify ID' },
   { href: '/payment', label: 'Checkout' },

@@ -3,12 +3,14 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ShieldAlert, RefreshCw, Send, Check, X, Loader2 } from 'lucide-react';
+import { formatMoney } from '@/lib/utils';
 
 interface PaymentRequest {
   id: string;
   user_email: string;
   user_name: string | null;
   amount: number;
+  currency: string;
   method: string;
   status: 'pending_admin_assignment' | 'awaiting_payment' | 'reported_paid' | 'confirmed' | 'cancelled';
   account_details: string | null;
@@ -157,7 +159,7 @@ export default function AdminPaymentsPage() {
                   <p className="text-sm text-muted-foreground">{item.user_email}</p>
                 </div>
                 <span className="rounded-full bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent">
-                  {methodLabels[item.method]} · ${item.amount}
+                  {methodLabels[item.method]} · {formatMoney(item.amount, item.currency)}
                 </span>
               </div>
               <textarea
@@ -192,7 +194,7 @@ export default function AdminPaymentsPage() {
                 className="rounded-lg border border-border bg-card px-4 py-3 text-sm"
               >
                 <div className="flex items-center justify-between">
-                  <span>{item.user_name || item.user_email} — {methodLabels[item.method]} · ${item.amount}</span>
+                  <span>{item.user_name || item.user_email} — {methodLabels[item.method]} · {formatMoney(item.amount, item.currency)}</span>
                   <span className="text-xs text-muted-foreground">Details sent</span>
                 </div>
               </div>
@@ -219,7 +221,7 @@ export default function AdminPaymentsPage() {
               <div>
                 <p className="font-medium text-primary">{item.user_name || item.user_email}</p>
                 <p className="text-sm text-muted-foreground">
-                  {methodLabels[item.method]} · ${item.amount} · {item.user_email}
+                  {methodLabels[item.method]} · {formatMoney(item.amount, item.currency)} · {item.user_email}
                 </p>
               </div>
               <div className="flex gap-2">
@@ -256,7 +258,7 @@ export default function AdminPaymentsPage() {
                 key={item.id}
                 className="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 text-sm"
               >
-                <span>{item.user_name || item.user_email} — {methodLabels[item.method]} · ${item.amount}</span>
+                <span>{item.user_name || item.user_email} — {methodLabels[item.method]} · {formatMoney(item.amount, item.currency)}</span>
                 <span className={item.status === 'confirmed' ? 'text-accent' : 'text-destructive'}>
                   {item.status}
                 </span>

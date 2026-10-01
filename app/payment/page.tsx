@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { useApp } from '@/lib/app-context';
 import { PROPERTY, INSPECTION_FEE } from '@/lib/property';
+import { formatMoney } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import {
   Lock,
@@ -27,6 +28,7 @@ interface PaymentRequestData {
   id: string;
   method: Method;
   amount: number;
+  currency: string;
   status: 'pending_admin_assignment' | 'awaiting_payment' | 'reported_paid' | 'confirmed' | 'cancelled';
   account_details: string | null;
 }
@@ -165,7 +167,7 @@ export default function PaymentPage() {
                 <Separator />
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-primary">Total Due</span>
-                  <span className="text-2xl font-bold text-primary">${INSPECTION_FEE}.00</span>
+                  <span className="text-2xl font-bold text-primary">{formatMoney(INSPECTION_FEE, request && request !== 'loading' ? request.currency : 'USD')}</span>
                 </div>
                 <div className="flex items-start gap-2 rounded-lg bg-secondary/50 p-3 text-xs text-muted-foreground">
                   <ShieldCheck className="h-4 w-4 shrink-0 text-accent" />
@@ -237,7 +239,7 @@ export default function PaymentPage() {
                   {request && request !== 'loading' && request.status === 'awaiting_payment' && (
                     <motion.div key="pay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
                       <p className="text-sm text-muted-foreground">
-                        Send <span className="font-semibold text-primary">${request.amount}.00</span> via{' '}
+                        Send <span className="font-semibold text-primary">{formatMoney(request.amount, request.currency)}</span> via{' '}
                         <span className="font-semibold text-primary">{methods.find((m) => m.id === request.method)?.label}</span> using these details:
                       </p>
                       <div className="rounded-lg border border-border bg-secondary/50 p-4">

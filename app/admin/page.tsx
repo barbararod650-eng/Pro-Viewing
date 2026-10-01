@@ -18,6 +18,7 @@ import {
   Mail,
   Phone,
 } from 'lucide-react';
+import { formatMoney } from '@/lib/utils';
 
 // ── Types ──
 
@@ -36,6 +37,7 @@ interface PaymentRequest {
   user_email: string;
   user_name: string | null;
   amount: number;
+  currency: string;
   method: string;
   status: 'pending_admin_assignment' | 'awaiting_payment' | 'reported_paid' | 'confirmed' | 'cancelled';
   account_details: string | null;
@@ -47,6 +49,7 @@ interface Property {
   name: string;
   address: string;
   price: number;
+  currency: string;
   status: 'draft' | 'published' | 'archived';
   image_url: string | null;
   created_at: string;
@@ -101,6 +104,7 @@ export default function AdminPage() {
   const [newBaths, setNewBaths] = useState('');
   const [newSqft, setNewSqft] = useState('');
   const [newAmenities, setNewAmenities] = useState('');
+  const [newCurrency, setNewCurrency] = useState<'USD' | 'EUR'>('USD');
   const [newImageUrl, setNewImageUrl] = useState<string | null>(null);
   const [newGalleryUrls, setNewGalleryUrls] = useState<string[]>([]);
   const [newVerified, setNewVerified] = useState(true);
@@ -261,6 +265,7 @@ export default function AdminPage() {
     setNewBaths('');
     setNewSqft('');
     setNewAmenities('');
+    setNewCurrency('USD');
     setNewImageUrl(null);
     setNewGalleryUrls([]);
     setNewVerified(true);
@@ -283,6 +288,7 @@ export default function AdminPage() {
           address: newAddress.trim(),
           description: newDescription.trim(),
           price: Number(newPrice) || 0,
+          currency: newCurrency,
           inspection_fee: Number(newFee) || 25,
           beds: Number(newBeds) || 0,
           baths: Number(newBaths) || 0,
@@ -586,14 +592,22 @@ export default function AdminPage() {
                 <input
                   value={newPrice}
                   onChange={(e) => setNewPrice(e.target.value)}
-                  placeholder="Monthly rent ($)"
+                  placeholder="Monthly rent"
                   type="number"
                   className="rounded-md border border-border bg-background px-3 py-2 text-sm"
                 />
-                <input
+                <select
+                  value={newCurrency}
+                  onChange={(e) => setNewCurrency(e.target.value as 'USD' | 'EUR')}
+                  className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+                >
+                  <option value="USD">USD ($)</option>
+                  <option value="EUR">EUR (€)</option>
+                </select>
+                  <input
                   value={newFee}
                   onChange={(e) => setNewFee(e.target.value)}
-                  placeholder="Inspection fee ($)"
+                  placeholder="Inspection fee"
                   type="number"
                   className="rounded-md border border-border bg-background px-3 py-2 text-sm"
                 />
@@ -902,7 +916,7 @@ export default function AdminPage() {
                       <p className="text-sm text-muted-foreground">{item.user_email}</p>
                     </div>
                     <span className="rounded-full bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent">
-                      {methodLabels[item.method]} · ${item.amount}
+                      {methodLabels[item.method]} · {formatMoney(item.amount, item.currency)}
                     </span>
                   </div>
                   <textarea
@@ -934,7 +948,7 @@ export default function AdminPage() {
                 {awaitingPayment.map((item) => (
                   <div key={item.id} className="rounded-lg border border-border bg-card px-4 py-3 text-sm">
                     <div className="flex items-center justify-between">
-                      <span>{item.user_name || item.user_email} — {methodLabels[item.method]} · ${item.amount}</span>
+                      <span>{item.user_name || item.user_email} — {methodLabels[item.method]} · {formatMoney(item.amount, item.currency)}</span>
                       <span className="text-xs text-muted-foreground">Details sent</span>
                     </div>
                   </div>
@@ -958,7 +972,7 @@ export default function AdminPage() {
                   <div>
                     <p className="font-medium text-primary">{item.user_name || item.user_email}</p>
                     <p className="text-sm text-muted-foreground">
-                      {methodLabels[item.method]} · ${item.amount} · {item.user_email}
+                      {methodLabels[item.method]} · {formatMoney(item.amount, item.currency)} · {item.user_email}
                     </p>
                   </div>
                   <div className="flex gap-2">
@@ -992,7 +1006,7 @@ export default function AdminPage() {
               <div className="space-y-2">
                 {donePayments.map((item) => (
                   <div key={item.id} className="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 text-sm">
-                    <span>{item.user_name || item.user_email} — {methodLabels[item.method]} · ${item.amount}</span>
+                    <span>{item.user_name || item.user_email} — {methodLabels[item.method]} · {formatMoney(item.amount, item.currency)}</span>
                     <span className={item.status === 'confirmed' ? 'text-accent' : 'text-destructive'}>
                       {item.status}
                     </span>
