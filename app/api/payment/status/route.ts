@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from('payment_requests')
-    .select('id, method, amount, status, account_details, created_at')
+    .select('id, method, amount, currency, status, account_details, created_at')
     .eq('user_email', email)
     .eq('property_id', propertyId)
     .order('created_at', { ascending: false })

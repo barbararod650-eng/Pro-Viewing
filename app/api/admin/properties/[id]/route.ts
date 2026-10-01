@@ -13,6 +13,7 @@ const EDITABLE_FIELDS = [
   'address',
   'description',
   'price',
+  'currency',
   'inspection_fee',
   'beds',
   'baths',

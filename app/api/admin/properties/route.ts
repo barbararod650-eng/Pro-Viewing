@@ -54,6 +54,7 @@ export async function POST(req: NextRequest) {
       address: body.address,
       description: body.description || '',
       price: body.price || 0,
+      currency: body.currency === 'EUR' ? 'EUR' : 'USD',
       inspection_fee: body.inspection_fee ?? 25,
       beds: body.beds || 0,
       baths: body.baths || 0,

@@ -4,18 +4,24 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Public: the browsable list of published listings. Never returns drafts.
+// Public: the "default" property (oldest published listing).
+// Used by the payment page when the visitor hasn't picked a property yet.
 export async function GET() {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from('properties')
-    .select('id, name, address, price, currency, beds, baths, sqft, image_url, verified')
+    .select('*')
     .eq('status', 'published')
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  if (!data) {
+    return NextResponse.json({ error: 'Not found.' }, { status: 404 });
+  }
 
-  return NextResponse.json({ properties: data });
+  return NextResponse.json({ property: data });
 }

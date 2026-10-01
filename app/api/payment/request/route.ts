@@ -3,7 +3,7 @@ import { getSupabaseAdmin, getDefaultPropertyId } from '@/lib/supabase-admin';
 
 export const runtime = 'nodejs';
 
-const VALID_METHODS = ['revolut', 'wero', 'bank_transfer', 'paypal'];
+const VALID_METHODS = ['revolut', 'wero', 'bank_transfer', 'paypal', 'payoneer', 'wise', 'skrill'];
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
 
     const { data: property, error: propError } = await supabase
       .from('properties')
-      .select('inspection_fee')
+      .select('inspection_fee, currency')
       .eq('id', propertyId)
       .maybeSingle();
 
@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
         user_email: email,
         user_name: name || null,
         amount: property.inspection_fee,
+        currency: property.currency || 'USD',
         method,
         property_id: propertyId,
         status: 'pending_admin_assignment',
