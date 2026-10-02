@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatMoney } from '@/lib/utils';
 import {
@@ -14,7 +13,6 @@ import {
   ShieldCheck,
   Sparkles,
   Loader2,
-  Building2,
 } from 'lucide-react';
 
 interface PropertySummary {
@@ -56,14 +54,6 @@ export default function HomePage() {
             Every listing is reviewed by our team before it's published, so you can book a
             viewing with confidence.
           </p>
-          <div className="mt-8 flex justify-center">
-            <Button asChild size="lg" className="bg-accent text-accent-foreground hover:bg-accent/90">
-              <Link href="/list-your-property">
-                <Building2 className="mr-2 h-5 w-5" />
-                List Your Property
-              </Link>
-            </Button>
-          </div>
         </div>
       </section>
 

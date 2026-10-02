@@ -16,7 +16,7 @@ export async function getAuthedUser(req: NextRequest): Promise<AuthedUser | null
 
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data.user?.email || !data.user.email_confirmed_at) return null;
+  if (error || !data.user?.email) return null;
 
   return {
     email: data.user.email,

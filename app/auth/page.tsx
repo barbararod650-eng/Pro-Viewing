@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { useApp } from '@/lib/app-context';
 import { PROPERTY } from '@/lib/property';
 import { useRouter } from 'next/navigation';
-import { ShieldCheck, Lock, Mail, User, ArrowRight, Check, MailCheck } from 'lucide-react';
+import { ShieldCheck, Lock, Mail, User, ArrowRight, Check } from 'lucide-react';
 
 export default function AuthPage() {
   const [mode, setMode] = useState<'signup' | 'login'>('signup');
@@ -17,38 +17,14 @@ export default function AuthPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
-  const [confirmedRedirect, setConfirmedRedirect] = useState(false);
-  const { user, signUp, signIn, booking } = useApp();
+  const [signedUp, setSignedUp] = useState(false);
+  const { user, signUp, signIn } = useApp();
   const router = useRouter();
-  
-  useEffect(() => {
-    const justConfirmed =
-      typeof window !== 'undefined' && window.location.hash.includes('type=signup');
 
-    if (justConfirmed) {
-      setConfirmedRedirect(true);
-      const timeout = setTimeout(() => router.push('/verify'), 2000);
-      return () => clearTimeout(timeout);
-    }
-  }, [router]);
-  
   // Already signed in? Skip the form.
   useEffect(() => {
-    if (user && !confirmedRedirect) router.replace('/verify');
-  }, [user, confirmedRedirect, router]);
-    useEffect(() => {
-    // If a Supabase email-confirmation link just logged this person in,
-    // or they're already signed in from a previous visit, skip the form.
-    const justConfirmed =
-      typeof window !== 'undefined' && window.location.hash.includes('type=signup');
-
-    if (justConfirmed) {
-      setConfirmedRedirect(true);
-      const timeout = setTimeout(() => router.push('/verify'), 2000);
-      return () => clearTimeout(timeout);
-    }
-  }, [router]);
+    if (user) router.replace('/verify');
+  }, [user, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,17 +32,13 @@ export default function AuthPage() {
     setLoading(true);
 
     if (mode === 'signup') {
-      const { error, needsEmailConfirmation } = await signUp(email, password, name || email.split('@')[0]);
+      const { error } = await signUp(email, password, name || email.split('@')[0]);
       setLoading(false);
       if (error) {
         setError(error);
         return;
       }
-      if (needsEmailConfirmation) {
-        setAwaitingConfirmation(true);
-        return;
-      }
-      router.push('/verify');
+      setSignedUp(true);
     } else {
       const { error } = await signIn(email, password);
       setLoading(false);
@@ -78,41 +50,7 @@ export default function AuthPage() {
     }
   };
 
-  if (awaitingConfirmation) {
-    return (
-      <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-background p-8">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          className="max-w-md text-center"
-        >
-          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-accent/10">
-            <MailCheck className="h-8 w-8 text-accent" />
-          </div>
-          <h1 className="text-2xl font-bold text-primary">Check your email</h1>
-          <p className="mt-2 text-muted-foreground">
-            We sent a confirmation link to <span className="font-medium text-primary">{email}</span>.
-            Click it to activate your account, then come back here and sign in.
-          </p>
-          <Button
-            className="mt-6"
-            variant="outline"
-            onClick={() => {
-              setAwaitingConfirmation(false);
-              setMode('login');
-              setPassword('');
-            }}
-          >
-            Back to sign in
-          </Button>
-        </motion.div>
-      </div>
-    );
-  }
-
-  
-  if (confirmedRedirect) {
+  if (signedUp) {
     return (
       <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-background p-8">
         <motion.div
@@ -124,8 +62,10 @@ export default function AuthPage() {
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-accent">
             <Check className="h-8 w-8 text-accent-foreground" />
           </div>
-          <h1 className="text-2xl font-bold text-primary">Email confirmed!</h1>
-          <p className="mt-2 text-muted-foreground">You're all set. Taking you to identity verification...</p>
+          <h1 className="text-2xl font-bold text-primary">Sign up successful!</h1>
+          <p className="mt-2 text-muted-foreground">
+            Your account has been created. Taking you to identity verification...
+          </p>
         </motion.div>
       </div>
     );

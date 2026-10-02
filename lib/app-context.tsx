@@ -206,8 +206,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       password,
       options: {
         data: { full_name: name },
-        emailRedirectTo:
-          typeof window !== 'undefined' ? `${window.location.origin}/auth` : undefined,
       },
     });
 
