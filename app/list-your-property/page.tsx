@@ -73,7 +73,7 @@ export default function ListYourPropertyPage() {
           <h1 className="text-3xl font-bold tracking-tight text-primary">List your property</h1>
           <p className="mt-2 text-muted-foreground">
             Tell us about your property. Our team reviews every submission before it goes live, so
-            renters can trust every listing on KeyView.
+            renters can trust every listing on Fidezia.
           </p>
         </div>
 

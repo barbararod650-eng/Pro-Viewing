@@ -28,11 +28,11 @@ export const PROPERTY = {
 };
 
 export const TIME_SLOTS = [
-  '9:00 AM – 9:30 AM',
-  '11:00 AM – 11:30 AM',
-  '1:00 PM – 1:30 PM',
-  '3:00 PM – 3:30 PM',
-  '5:00 PM – 5:30 PM',
+  '9:00 AM – 10:00 AM',
+  '11:00 AM – 12:00 PM',
+  '1:00 PM – 2:00 PM',
+  '3:00 PM – 4:00 PM',
+  '5:00 PM – 6:00 PM',
 ];
 
 export const INSPECTION_FEE = 25;
@@ -50,6 +50,6 @@ export function getMockViewingWindow(): { start: Date; end: Date } {
   start.setMinutes(start.getMinutes() + 10);
   start.setSeconds(0, 0);
   const end = new Date(start);
-  end.setMinutes(end.getMinutes() + 30);
+  end.setMinutes(end.getMinutes() + 60);
   return { start, end };
 }

@@ -90,7 +90,7 @@ export default function AuthPage() {
             Your identity, protected.
           </h1>
           <p className="mt-4 text-primary-foreground/70">
-            KeyView ensures every visitor is verified before granting access. No key, no code — just verified, time-gated entry.
+            Fidezia ensures every visitor is verified before granting access. No key, no code — just verified, time-gated entry.
           </p>
           <div className="mt-8 space-y-3">
             {[

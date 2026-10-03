@@ -7,7 +7,7 @@ import { Navbar } from '@/components/navbar';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'KeyView — Secure Property Viewings',
+  title: 'Fidezia — Secure Property Viewings',
   description:
     'Schedule and manage secure property viewings with identity verification and time-gated access codes.',
 };

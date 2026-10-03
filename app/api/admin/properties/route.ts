@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
+import { detectTimezoneFromAddress } from '@/lib/timezone-detect';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -28,11 +29,11 @@ export async function GET(req: NextRequest) {
 }
 
 const DEFAULT_TIME_SLOTS = [
-  '9:00 AM – 9:30 AM',
-  '11:00 AM – 11:30 AM',
-  '1:00 PM – 1:30 PM',
-  '3:00 PM – 3:30 PM',
-  '5:00 PM – 5:30 PM',
+  '9:00 AM – 10:00 AM',
+  '11:00 AM – 12:00 PM',
+  '1:00 PM – 2:00 PM',
+  '3:00 PM – 4:00 PM',
+  '5:00 PM – 6:00 PM',
 ];
 
 export async function POST(req: NextRequest) {
@@ -63,7 +64,7 @@ export async function POST(req: NextRequest) {
       image_url: body.image_url || null,
       gallery_images: body.gallery_images || [],
       time_slots: body.time_slots?.length ? body.time_slots : DEFAULT_TIME_SLOTS,
-      timezone: body.timezone || 'America/Los_Angeles',
+      timezone: body.timezone || detectTimezoneFromAddress(body.address),
       status: body.status === 'published' ? 'published' : 'draft',
       verified: body.verified ?? true,
     })

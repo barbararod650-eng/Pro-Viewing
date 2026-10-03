@@ -29,7 +29,7 @@ export function Navbar() {
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
             <ShieldCheck className="h-5 w-5 text-accent" />
           </div>
-          <span className="text-lg font-bold tracking-tight text-primary">KeyView</span>
+          <span className="text-lg font-bold tracking-tight text-primary">Fidezia</span>
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex">

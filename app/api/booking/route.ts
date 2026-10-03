@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: lookupError.message }, { status: 500 });
   }
 
-  if (existing && new Date(existing.slot_end).getTime() <= Date.now()) {
+  if (existing && new Date(existing.slot_start).getTime() <= Date.now()) {
     return NextResponse.json(
       { error: "Your viewing has already started, so it can't be rescheduled." },
       { status: 400 }
