@@ -112,10 +112,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const refreshStatus = useCallback(async () => {
     if (!email) return;
     try {
+      const targetPropertyId = pendingRef.current.propertyId || viewing?.property_id;
+      const propertyQuery = targetPropertyId ? `&propertyId=${encodeURIComponent(targetPropertyId)}` : '';
       const [vRes, pRes, bRes] = await Promise.all([
-        fetch(`/api/verify/status?email=${encodeURIComponent(email)}`),
-        fetch(`/api/payment/status?email=${encodeURIComponent(email)}`),
-        authFetch('/api/booking'),
+        fetch(`/api/verify/status?email=${encodeURIComponent(email)}${propertyQuery}`),
+        fetch(`/api/payment/status?email=${encodeURIComponent(email)}${propertyQuery}`),
+        authFetch(`/api/booking${targetPropertyId ? `?propertyId=${encodeURIComponent(targetPropertyId)}` : ''}`),
       ]);
       const v = await vRes.json();
       const p = await pRes.json();
@@ -159,7 +161,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch {
       // keep whatever we had on a transient network error
     }
-  }, [email]);
+  }, [email, viewing?.property_id]);
 
   useEffect(() => {
     if (email) {

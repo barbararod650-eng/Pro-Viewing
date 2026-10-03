@@ -31,6 +31,7 @@ export default function AdminPaymentsPage() {
   const [error, setError] = useState('');
   const [items, setItems] = useState<PaymentRequest[]>([]);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [accessCodes, setAccessCodes] = useState<Record<string, string>>({});
   const [actingOn, setActingOn] = useState<string | null>(null);
 
   useEffect(() => {
@@ -83,6 +84,7 @@ export default function AdminPaymentsPage() {
         body: JSON.stringify({
           action,
           accountDetails: action === 'assign' ? drafts[id] : undefined,
+          accessCode: action === 'confirm' ? accessCodes[id] : undefined,
         }),
       });
       if (res.ok) {
@@ -216,23 +218,36 @@ export default function AdminPaymentsPage() {
           {awaitingConfirmation.map((item) => (
             <div
               key={item.id}
-              className="flex items-center justify-between rounded-xl border border-border bg-card p-4 shadow-sm"
+              className="rounded-xl border border-border bg-card p-4 shadow-sm"
             >
-              <div>
+              <div className="mb-3">
                 <p className="font-medium text-primary">{item.user_name || item.user_email}</p>
                 <p className="text-sm text-muted-foreground">
                   {methodLabels[item.method]} · {formatMoney(item.amount, item.currency)} · {item.user_email}
                 </p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <input
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={accessCodes[item.id] ?? ''}
+                  onChange={(e) =>
+                    setAccessCodes((codes) => ({
+                      ...codes,
+                      [item.id]: e.target.value.replace(/\D/g, '').slice(0, 6),
+                    }))
+                  }
+                  placeholder="6-digit access code"
+                  className="rounded-md border border-border bg-background px-3 py-2 text-sm sm:w-48"
+                />
                 <Button
                   size="sm"
                   onClick={() => handleAction(item.id, 'confirm')}
-                  disabled={actingOn === item.id}
+                  disabled={actingOn === item.id || accessCodes[item.id]?.length !== 6}
                   className="bg-accent text-accent-foreground hover:bg-accent/90"
                 >
                   <Check className="mr-1.5 h-4 w-4" />
-                  Confirm received
+                  Confirm payment and code
                 </Button>
                 <Button
                   size="sm"

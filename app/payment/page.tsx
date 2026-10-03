@@ -52,7 +52,8 @@ export default function PaymentPage() {
   const fetchStatus = useCallback(async () => {
     if (!user) return;
     try {
-      const res = await fetch(`/api/payment/status?email=${encodeURIComponent(user.email)}`);
+      const propertyQuery = booking.propertyId ? `&propertyId=${encodeURIComponent(booking.propertyId)}` : '';
+      const res = await fetch(`/api/payment/status?email=${encodeURIComponent(user.email)}${propertyQuery}`);
       const data = await res.json();
       setRequest(data.paymentRequest || null);
       if (data.paymentRequest?.status === 'confirmed' && booking.status !== 'paid') {
@@ -61,7 +62,7 @@ export default function PaymentPage() {
     } catch {
       // leave current state as-is on transient errors
     }
-  }, [user, booking.status, setPaid]);
+  }, [user, booking.status, booking.propertyId, setPaid]);
 
   useEffect(() => {
     fetchStatus();
@@ -90,7 +91,7 @@ export default function PaymentPage() {
           email: user.email,
           name: user.name,
           method: selectedMethod,
-          amount: INSPECTION_FEE,
+          propertyId: booking.propertyId,
         }),
       });
       const data = await res.json();

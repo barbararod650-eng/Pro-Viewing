@@ -85,7 +85,9 @@ export default function DashboardPage() {
   const syncAccess = useCallback(async () => {
     if (!user) return;
     try {
-      const res = await authFetch('/api/booking/access');
+      const res = await authFetch(
+        `/api/booking/access${viewing?.property_id ? `?propertyId=${encodeURIComponent(viewing.property_id)}` : ''}`
+      );
       const data = await res.json();
       if (!res.ok) return;
       setAccessState(data.state);

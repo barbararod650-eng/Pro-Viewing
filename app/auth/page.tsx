@@ -33,12 +33,21 @@ export default function AuthPage() {
 
     if (mode === 'signup') {
       const { error } = await signUp(email, password, name || email.split('@')[0]);
-      setLoading(false);
       if (error) {
+        setLoading(false);
         setError(error);
         return;
       }
+
+      const signInResult = await signIn(email, password);
+      setLoading(false);
+      if (signInResult.error) {
+        setError(signInResult.error);
+        return;
+      }
+
       setSignedUp(true);
+      window.setTimeout(() => router.replace('/verify'), 900);
     } else {
       const { error } = await signIn(email, password);
       setLoading(false);
