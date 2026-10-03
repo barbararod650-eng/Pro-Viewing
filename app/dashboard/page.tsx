@@ -49,7 +49,7 @@ function formatCountdown(ms: number): { hours: string; minutes: string; seconds:
 }
 
 export default function DashboardPage() {
-  const { user, authLoading, viewing, viewingLoaded, refreshStatus } = useApp();
+  const { user, authLoading, viewing, viewings, viewingLoaded, refreshStatus } = useApp();
   const router = useRouter();
 
   const [accessState, setAccessState] = useState<AccessState>('loading');
@@ -181,6 +181,33 @@ export default function DashboardPage() {
           Your viewing details and secure access code are below.
         </p>
       </motion.div>
+
+      {viewings.length > 1 && (
+        <div className="mb-6 rounded-xl border border-border bg-card p-4 shadow-sm">
+          <p className="mb-3 text-sm font-semibold text-primary">Your scheduled viewings</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {viewings.map((item) => (
+              <Link
+                key={item.id}
+                href={`/property/${item.property_id}`}
+                className={cn(
+                  'rounded-lg border px-3 py-2 text-sm transition-colors hover:border-accent/50 hover:bg-secondary',
+                  item.id === viewing?.id ? 'border-accent bg-accent/5' : 'border-border'
+                )}
+              >
+                <span className="block font-medium text-primary">
+                  {new Date(`${item.slot_date}T12:00:00Z`).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    timeZone: 'UTC',
+                  })}
+                </span>
+                <span className="text-xs text-muted-foreground">{item.slot_label}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {accessState === 'no_booking' && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="rounded-xl border border-dashed border-border bg-card p-10 text-center">

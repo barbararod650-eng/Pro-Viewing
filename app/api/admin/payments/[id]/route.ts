@@ -16,6 +16,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const body = await req.json().catch(() => ({}));
   const action = body.action as 'assign' | 'confirm' | 'cancel';
   const supabase = getSupabaseAdmin();
+  let accessCode = '';
+  let bookingId: string | null = null;
+
+  if (action === 'confirm') {
+    accessCode = String(body.accessCode || '').trim();
+    if (!/^\d{6}$/.test(accessCode)) {
+      return NextResponse.json({ error: 'A valid 6-digit access code is required.' }, { status: 400 });
+    }
+  }
 
   let update: Record<string, unknown>;
 
@@ -30,15 +39,34 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       assigned_at: new Date().toISOString(),
     };
   } else if (action === 'confirm') {
-    const accessCode = String(body.accessCode || '').trim();
-    if (!/^\d{6}$/.test(accessCode)) {
-      return NextResponse.json({ error: 'A valid 6-digit access code is required.' }, { status: 400 });
-    }
     update = { status: 'confirmed', confirmed_at: new Date().toISOString() };
   } else if (action === 'cancel') {
     update = { status: 'cancelled' };
   } else {
     return NextResponse.json({ error: 'Invalid action.' }, { status: 400 });
+  }
+
+  if (action === 'confirm') {
+    const { data: payment, error: paymentLookupError } = await supabase
+      .from('payment_requests')
+      .select('user_email, property_id')
+      .eq('id', params.id)
+      .maybeSingle();
+    if (paymentLookupError || !payment?.property_id) {
+      return NextResponse.json({ error: 'Payment request not found.' }, { status: 404 });
+    }
+
+    const { data: booking, error: bookingLookupError } = await supabase
+      .from('bookings')
+      .select('id')
+      .eq('user_email', payment.user_email)
+      .eq('property_id', payment.property_id)
+      .eq('status', 'active')
+      .maybeSingle();
+    if (bookingLookupError || !booking) {
+      return NextResponse.json({ error: 'No active viewing was found for this property.' }, { status: 409 });
+    }
+    bookingId = booking.id;
   }
 
   const { data: paymentRequest, error } = await supabase
@@ -55,19 +83,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: 'Payment request not found.' }, { status: 404 });
   }
 
-  if (action === 'confirm') {
-    const accessCode = String(body.accessCode || '').trim();
-    const { data: booking, error: bookingError } = await supabase
+  if (action === 'confirm' && bookingId) {
+    const { error: bookingError } = await supabase
       .from('bookings')
       .update({ access_code: accessCode })
-      .eq('user_email', paymentRequest.user_email)
-      .eq('property_id', paymentRequest.property_id)
-      .eq('status', 'active')
-      .select('id')
-      .maybeSingle();
+      .eq('id', bookingId);
 
-    if (bookingError || !booking) {
-      return NextResponse.json({ error: 'Payment confirmed, but no active viewing was found for this property.' }, { status: 409 });
+    if (bookingError) {
+      return NextResponse.json({ error: 'Could not save the access code.' }, { status: 500 });
     }
   }
 

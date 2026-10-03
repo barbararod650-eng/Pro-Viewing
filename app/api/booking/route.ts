@@ -19,25 +19,30 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Please sign in.' }, { status: 401 });
   }
 
-  const propertyId = req.nextUrl.searchParams.get('propertyId') || (await getDefaultPropertyId());
-  if (!propertyId) {
-    return NextResponse.json({ error: 'No property specified.' }, { status: 400 });
-  }
-
+  const propertyId = req.nextUrl.searchParams.get('propertyId');
   const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase
+  let query = supabase
     .from('bookings')
     .select(VIEWING_COLUMNS)
     .eq('user_email', user.email)
-    .eq('property_id', propertyId)
-    .eq('status', 'active')
-    .maybeSingle();
+    .eq('status', 'active');
+
+  if (propertyId) query = query.eq('property_id', propertyId);
+
+  const { data, error } = propertyId
+    ? await query.maybeSingle()
+    : await query.order('slot_start', { ascending: true });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ viewing: data });
+  const viewings = propertyId ? (data ? [data] : []) : Array.isArray(data) ? data : [];
+
+  return NextResponse.json({
+    viewing: viewings[0] ?? null,
+    viewings,
+  });
 }
 
 export async function POST(req: NextRequest) {

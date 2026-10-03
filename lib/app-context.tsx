@@ -45,6 +45,7 @@ export interface AppState {
   verification: VerificationState;
   payment: PaymentState;
   viewing: Viewing | null;
+  viewings: Viewing[];
   viewingLoaded: boolean;
   refreshStatus: () => Promise<void>;
   booking: ViewingBooking;
@@ -101,6 +102,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [verification, setVerification] = useState<VerificationState>('unknown');
   const [payment, setPayment] = useState<PaymentState>('unknown');
   const [viewing, setViewing] = useState<Viewing | null>(null);
+  const [viewings, setViewings] = useState<Viewing[]>([]);
   const [viewingLoaded, setViewingLoaded] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const email = user?.email;
@@ -117,7 +119,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const [vRes, pRes, bRes] = await Promise.all([
         fetch(`/api/verify/status?email=${encodeURIComponent(email)}${propertyQuery}`),
         fetch(`/api/payment/status?email=${encodeURIComponent(email)}${propertyQuery}`),
-        authFetch(`/api/booking${targetPropertyId ? `?propertyId=${encodeURIComponent(targetPropertyId)}` : ''}`),
+        authFetch('/api/booking'),
       ]);
       const v = await vRes.json();
       const p = await pRes.json();
@@ -126,7 +128,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       if (!bRes.ok) return;
       const b = await bRes.json();
-      let current: Viewing | null = b.viewing ?? null;
+      const savedViewings: Viewing[] = Array.isArray(b.viewings) ? b.viewings : [];
+      let current: Viewing | null = savedViewings.find(
+        (item) => item.property_id === pendingRef.current.propertyId
+      ) ?? b.viewing ?? null;
 
       const chosen = pendingRef.current;
       if (!current && chosen.date && chosen.timeSlot && chosen.propertyId) {
@@ -145,6 +150,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const c = await claim.json();
           if (claim.ok) {
             current = c.viewing;
+            savedViewings.push(c.viewing);
           } else {
             setNotice(
               `${c.error || "We couldn't reserve the time you picked."} Please choose a new time from your dashboard.`
@@ -156,6 +162,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       }
 
+      setViewings(savedViewings);
       setViewing(current);
       setViewingLoaded(true);
     } catch {
@@ -170,6 +177,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setVerification('unknown');
       setPayment('unknown');
       setViewing(null);
+      setViewings([]);
       setViewingLoaded(false);
     }
   }, [email, refreshStatus]);
@@ -268,6 +276,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         verification,
         payment,
         viewing,
+        viewings,
         viewingLoaded,
         refreshStatus,
         booking,
