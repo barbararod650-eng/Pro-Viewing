@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, getDefaultPropertyId } from '@/lib/supabase-admin';
+import { getAuthedUser } from '@/lib/auth-server';
 
 export const runtime = 'nodejs';
 
@@ -7,10 +8,15 @@ const VALID_METHODS = ['revolut', 'wero', 'bank_transfer', 'paypal', 'payoneer',
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, name, method, propertyId: bodyPropertyId } = await req.json();
+    const user = await getAuthedUser(req);
+    if (!user) {
+      return NextResponse.json({ error: 'Please sign in.' }, { status: 401 });
+    }
+
+    const { method, propertyId: bodyPropertyId } = await req.json();
     const propertyId = bodyPropertyId || (await getDefaultPropertyId());
 
-    if (!email || !method || !VALID_METHODS.includes(method) || !propertyId) {
+    if (!method || !VALID_METHODS.includes(method) || !propertyId) {
       return NextResponse.json({ error: 'Missing or invalid fields.' }, { status: 400 });
     }
 
@@ -32,8 +38,8 @@ export async function POST(req: NextRequest) {
     const { data, error } = await supabase
       .from('payment_requests')
       .insert({
-        user_email: email,
-        user_name: name || null,
+        user_email: user.email,
+        user_name: user.name || null,
         amount: property.inspection_fee,
         currency: property.currency || 'USD',
         method,

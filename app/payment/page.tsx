@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { useApp } from '@/lib/app-context';
-import { PROPERTY, INSPECTION_FEE } from '@/lib/property';
 import { formatMoney } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import {
@@ -22,7 +21,7 @@ import {
   ArrowRightLeft,
 } from 'lucide-react';
 
-type Method = 'revolut' | 'wero' | 'bank_transfer' | 'paypal';
+type Method = 'revolut' | 'wero' | 'bank_transfer' | 'paypal' | 'payoneer' | 'wise' | 'skrill';
 
 interface PaymentRequestData {
   id: string;
@@ -38,16 +37,37 @@ const methods: { id: Method; label: string; icon: typeof Wallet; blurb: string }
   { id: 'wero', label: 'Wero', icon: ArrowRightLeft, blurb: 'European instant bank-to-bank payment' },
   { id: 'bank_transfer', label: 'Bank Transfer', icon: Landmark, blurb: 'Direct transfer using account/IBAN details' },
   { id: 'paypal', label: 'PayPal', icon: Wallet, blurb: 'Send to a PayPal email address' },
+  { id: 'payoneer', label: 'Payoneer', icon: Wallet, blurb: 'Send through your Payoneer account' },
+  { id: 'wise', label: 'Wise', icon: ArrowRightLeft, blurb: 'International transfer through Wise' },
+  { id: 'skrill', label: 'Skrill', icon: Wallet, blurb: 'Send through your Skrill wallet' },
 ];
 
 export default function PaymentPage() {
   const { user, booking, setPaid } = useApp();
   const router = useRouter();
   const [request, setRequest] = useState<PaymentRequestData | null | 'loading'>('loading');
+  const [property, setProperty] = useState<{
+    name: string;
+    address: string;
+    image_url: string | null;
+    inspection_fee: number;
+    currency: string;
+  } | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<Method | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [reportingPaid, setReportingPaid] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!booking.propertyId) {
+      setProperty(null);
+      return;
+    }
+    fetch(`/api/properties/${booking.propertyId}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setProperty(data?.property ?? null))
+      .catch(() => setProperty(null));
+  }, [booking.propertyId]);
 
   const fetchStatus = useCallback(async () => {
     if (!user) return;
@@ -136,7 +156,7 @@ export default function PaymentPage() {
             <Lock className="h-4 w-4 text-accent" />
             <span className="text-sm font-medium text-accent">Secure Checkout</span>
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-primary">Inspection Fee</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-primary">Secure Checkout</h1>
           <p className="mt-2 text-muted-foreground">
             Choose how you'd like to pay — we'll send you the account details to complete it.
           </p>
@@ -151,12 +171,17 @@ export default function PaymentPage() {
               <CardContent className="space-y-4">
                 <div className="flex items-start gap-4">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={PROPERTY.imageUrl} alt={PROPERTY.name} className="h-16 w-16 rounded-lg object-cover" />
+                  {property?.image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={property.image_url} alt={property.name} className="h-16 w-16 rounded-lg object-cover" />
+                  ) : (
+                    <div className="h-16 w-16 rounded-lg bg-secondary" />
+                  )}
                   <div className="flex-1">
-                    <p className="font-semibold text-primary">{PROPERTY.name}</p>
+                    <p className="font-semibold text-primary">{property?.name ?? 'Selected property'}</p>
                     <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
                       <MapPin className="h-3.5 w-3.5" />
-                      {PROPERTY.address}
+                      {property?.address ?? 'Property details loading'}
                     </div>
                     <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
                       <Calendar className="h-3.5 w-3.5" />
@@ -168,7 +193,10 @@ export default function PaymentPage() {
                 <Separator />
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-primary">Total Due</span>
-                  <span className="text-2xl font-bold text-primary">{formatMoney(INSPECTION_FEE, request && request !== 'loading' ? request.currency : 'USD')}</span>
+                  <span className="text-2xl font-bold text-primary">{formatMoney(
+                    request && request !== 'loading' ? request.amount : property?.inspection_fee ?? 0,
+                    request && request !== 'loading' ? request.currency : property?.currency ?? 'USD'
+                  )}</span>
                 </div>
                 <div className="flex items-start gap-2 rounded-lg bg-secondary/50 p-3 text-xs text-muted-foreground">
                   <ShieldCheck className="h-4 w-4 shrink-0 text-accent" />

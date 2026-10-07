@@ -8,7 +8,6 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useApp } from '@/lib/app-context';
 import { authFetch } from '@/lib/auth-fetch';
-import { PROPERTY } from '@/lib/property';
 import { ScheduleModal } from '@/components/schedule-modal';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -62,6 +61,13 @@ export default function DashboardPage() {
     const [scheduleOpen, setScheduleOpen] = useState(false);
   const [propertyInfo, setPropertyInfo] = useState<{
     name: string;
+    address: string;
+    image_url: string | null;
+    inspection_fee: number;
+    currency: string;
+    beds: number;
+    baths: number;
+    sqft: number;
     time_slots: string[];
     timezone: string;
   } | null>(null);
@@ -114,7 +120,11 @@ export default function DashboardPage() {
   useEffect(() => {
     if (accessState !== 'during' || code || revealingRef.current) return;
     revealingRef.current = true;
-    authFetch('/api/booking/access', { method: 'POST' })
+    authFetch('/api/booking/access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ propertyId: viewing?.property_id }),
+    })
       .then((res) => res.json())
       .then((data) => {
         if (data.code) setCode(data.code);
@@ -270,13 +280,16 @@ export default function DashboardPage() {
               <Card className="overflow-hidden shadow-sm">
                 <div className="relative h-48 overflow-hidden">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={PROPERTY.imageUrl} alt={PROPERTY.name} className="h-full w-full object-cover" />
+                  {propertyInfo?.image_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={propertyInfo.image_url} alt={propertyInfo.name} className="h-full w-full object-cover" />
+                  )}
                   <div className="absolute inset-0 bg-gradient-to-t from-primary/60 to-transparent" />
                   <div className="absolute bottom-4 left-4 right-4">
-                    <h2 className="text-xl font-bold text-white">{PROPERTY.name}</h2>
+                    <h2 className="text-xl font-bold text-white">{propertyInfo?.name ?? 'Selected property'}</h2>
                     <div className="mt-1 flex items-center gap-1.5 text-white/80">
                       <MapPin className="h-4 w-4" />
-                      <span className="text-sm">{PROPERTY.address}</span>
+                      <span className="text-sm">{propertyInfo?.address ?? 'Property details loading'}</span>
                     </div>
                   </div>
                 </div>
@@ -308,21 +321,21 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-2">
                       <Bed className="h-5 w-5 text-accent" />
                       <div>
-                        <p className="text-lg font-bold text-primary">{PROPERTY.beds}</p>
+                        <p className="text-lg font-bold text-primary">{propertyInfo?.beds ?? '—'}</p>
                         <p className="text-xs text-muted-foreground">Beds</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <Bath className="h-5 w-5 text-accent" />
                       <div>
-                        <p className="text-lg font-bold text-primary">{PROPERTY.baths}</p>
+                        <p className="text-lg font-bold text-primary">{propertyInfo?.baths ?? '—'}</p>
                         <p className="text-xs text-muted-foreground">Baths</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <Maximize className="h-5 w-5 text-accent" />
                       <div>
-                        <p className="text-lg font-bold text-primary">{PROPERTY.sqft.toLocaleString()}</p>
+                        <p className="text-lg font-bold text-primary">{propertyInfo?.sqft.toLocaleString() ?? '—'}</p>
                         <p className="text-xs text-muted-foreground">Sq Ft</p>
                       </div>
                     </div>

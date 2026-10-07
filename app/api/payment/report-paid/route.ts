@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
+import { getAuthedUser } from '@/lib/auth-server';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await getAuthedUser(req);
+    if (!user) {
+      return NextResponse.json({ error: 'Please sign in.' }, { status: 401 });
+    }
+
     const { id } = await req.json();
     if (!id) {
       return NextResponse.json({ error: 'Missing id.' }, { status: 400 });
@@ -15,6 +21,7 @@ export async function POST(req: NextRequest) {
       .from('payment_requests')
       .update({ status: 'reported_paid', paid_reported_at: new Date().toISOString() })
       .eq('id', id)
+      .eq('user_email', user.email)
       .eq('status', 'awaiting_payment')
       .select()
       .single();

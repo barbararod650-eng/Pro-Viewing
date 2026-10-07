@@ -71,6 +71,9 @@ const methodLabels: Record<string, string> = {
   wero: 'Wero',
   bank_transfer: 'Bank Transfer',
   paypal: 'PayPal',
+  payoneer: 'Payoneer',
+  wise: 'Wise',
+  skrill: 'Skrill',
 };
 
 type Tab = 'verifications' | 'payments' | 'properties' | 'inquiries';
