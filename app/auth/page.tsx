@@ -32,22 +32,24 @@ export default function AuthPage() {
     setLoading(true);
 
     if (mode === 'signup') {
-      const { error } = await signUp(email, password, name || email.split('@')[0]);
+      const { error, needsEmailConfirmation } = await signUp(email, password, name || email.split('@')[0]);
+      setLoading(false);
       if (error) {
-        setLoading(false);
         setError(error);
         return;
       }
 
+      if (needsEmailConfirmation) {
+        setSignedUp(true);
+        return;
+      }
+
       const signInResult = await signIn(email, password);
-      setLoading(false);
       if (signInResult.error) {
         setError(signInResult.error);
         return;
       }
-
-      setSignedUp(true);
-      window.setTimeout(() => router.replace('/verify'), 900);
+      router.replace('/verify');
     } else {
       const { error } = await signIn(email, password);
       setLoading(false);
@@ -71,9 +73,9 @@ export default function AuthPage() {
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-accent">
             <Check className="h-8 w-8 text-accent-foreground" />
           </div>
-          <h1 className="text-2xl font-bold text-primary">Sign up successful!</h1>
+          <h1 className="text-2xl font-bold text-primary">Check your email</h1>
           <p className="mt-2 text-muted-foreground">
-            Your account has been created. Taking you to identity verification...
+            Your account is almost ready. We sent a confirmation link to <span className="font-medium text-primary">{email}</span>. Confirm your email, then return here to sign in and continue.
           </p>
         </motion.div>
       </div>
