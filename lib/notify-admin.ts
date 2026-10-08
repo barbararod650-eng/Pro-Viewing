@@ -3,7 +3,8 @@ import nodemailer from 'nodemailer';
 // Server-only. Sends a plain-text alert email to the admin so the manual
 // steps (verification, payment, landlord inquiries) don't sit unnoticed.
 //
-// Required environment variables (set them in Netlify):
+// Required environment variables (set them in your host's settings, i.e. Vercel,
+// then redeploy):
 //   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS   the same SMTP login Supabase Auth uses
 //   ADMIN_NOTIFY_EMAIL                           where the alerts are delivered
 // Optional:
@@ -57,6 +58,8 @@ export async function notifyAdmin(alert: AdminAlert): Promise<void> {
     return;
   }
 
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
   try {
     const port = Number(process.env.SMTP_PORT || 465);
     const from = process.env.EMAIL_FROM || 'noreply@fidezia.org';
@@ -67,9 +70,9 @@ export async function notifyAdmin(alert: AdminAlert): Promise<void> {
       port,
       secure: port === 465,
       auth: { user, pass },
-      connectionTimeout: 8000,
-      greetingTimeout: 8000,
-      socketTimeout: 10000,
+      connectionTimeout: 5000,
+      greetingTimeout: 5000,
+      socketTimeout: 5000,
     });
 
     const lines = Object.entries(alert.fields)
@@ -86,13 +89,22 @@ export async function notifyAdmin(alert: AdminAlert): Promise<void> {
       `Open the admin page: ${siteUrl}/admin`,
     ].join('\n');
 
-    await transporter.sendMail({
-      from: `Fidezia <${from}>`,
-      to,
-      subject: `[Fidezia] ${singleLine(alert.subject)}`,
-      text,
-    });
+    // Never hold up the renter's request for long: serverless hosts stop a
+    // function after roughly 10 seconds, so give up on the email after 6.
+    await Promise.race([
+      transporter.sendMail({
+        from: `Fidezia <${from}>`,
+        to,
+        subject: `[Fidezia] ${singleLine(alert.subject)}`,
+        text,
+      }),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Email send timed out')), 6000);
+      }),
+    ]);
   } catch (err) {
     console.error('Admin email alert failed:', err instanceof Error ? err.message : err);
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
