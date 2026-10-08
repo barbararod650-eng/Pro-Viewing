@@ -1,5 +1,5 @@
 /*
-# Create full KeyView schema
+# Create full Fidezia schema
 
 1. New Tables
 - `properties` — rental listings with name, address, price, currency (USD/EUR), inspection fee, beds, baths, sqft, amenities, images, time slots, timezone, status (draft/published/archived), verified flag.

@@ -63,7 +63,7 @@ import { supabase } from '@/lib/supabase-client';
 import { authFetch } from '@/lib/auth-fetch';
 import type { Session } from '@supabase/supabase-js';
 
-const PENDING_STORAGE_KEY = 'keyview_pending_slot_v2';
+const PENDING_STORAGE_KEY = 'fidezia_pending_slot_v2';
 
 const emptyBooking: ViewingBooking = {
   status: 'idle',
