@@ -48,6 +48,7 @@ export interface AppState {
   viewings: Viewing[];
   viewingLoaded: boolean;
   refreshStatus: () => Promise<void>;
+  selectViewing: (id: string) => void;
   booking: ViewingBooking;
   signUp: (email: string, password: string, name: string) => Promise<{ error: string | null; needsEmailConfirmation: boolean }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
@@ -110,6 +111,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const pendingRef = useRef(pending);
   pendingRef.current = pending;
   const claimingRef = useRef(false);
+  // Which saved viewing the person picked on the dashboard (null = default to the earliest).
+  const selectedIdRef = useRef<string | null>(null);
 
   const refreshStatus = useCallback(async () => {
     if (!email) return;
@@ -129,9 +132,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!bRes.ok) return;
       const b = await bRes.json();
       const savedViewings: Viewing[] = Array.isArray(b.viewings) ? b.viewings : [];
-      let current: Viewing | null = savedViewings.find(
-        (item) => item.property_id === pendingRef.current.propertyId
-      ) ?? b.viewing ?? null;
+      let current: Viewing | null =
+        savedViewings.find((item) => item.id === selectedIdRef.current) ??
+        savedViewings.find((item) => item.property_id === pendingRef.current.propertyId) ??
+        b.viewing ??
+        null;
 
       const chosen = pendingRef.current;
       if (!current && chosen.date && chosen.timeSlot && chosen.propertyId) {
@@ -233,12 +238,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     await supabase.auth.signOut();
+    selectedIdRef.current = null;
     setPending(emptyBooking);
     setViewing(null);
     setViewingLoaded(false);
   };
 
   const scheduleViewing = (dateStr: string, timeSlot: string, propertyId: string) => {
+    selectedIdRef.current = null;
     setPending({
       status: 'scheduled',
       date: `${dateStr}T12:00:00Z`,
@@ -252,6 +259,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setPaid = useCallback(() => {}, []);
 
   const resetBooking = () => setPending(emptyBooking);
+
+  const selectViewing = useCallback(
+    (id: string) => {
+      const next = viewings.find((item) => item.id === id);
+      if (!next) return;
+      selectedIdRef.current = id;
+      setViewing(next);
+    },
+    [viewings]
+  );
 
   const booking: ViewingBooking = !user
     ? pending
@@ -279,6 +296,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         viewings,
         viewingLoaded,
         refreshStatus,
+        selectViewing,
         booking,
         signUp,
         signIn,

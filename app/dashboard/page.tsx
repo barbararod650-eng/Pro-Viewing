@@ -48,7 +48,7 @@ function formatCountdown(ms: number): { hours: string; minutes: string; seconds:
 }
 
 export default function DashboardPage() {
-  const { user, authLoading, viewing, viewings, viewingLoaded, refreshStatus } = useApp();
+  const { user, authLoading, viewing, viewings, viewingLoaded, refreshStatus, selectViewing } = useApp();
   const router = useRouter();
 
   const [accessState, setAccessState] = useState<AccessState>('loading');
@@ -72,30 +72,55 @@ export default function DashboardPage() {
     timezone: string;
   } | null>(null);
 
+  const selectedPropertyId = viewing?.property_id;
+
   useEffect(() => {
-    if (!viewing) {
+    if (!selectedPropertyId) {
       setPropertyInfo(null);
       return;
     }
-    fetch(`/api/properties/${viewing.property_id}`)
+    let cancelled = false;
+    fetch(`/api/properties/${selectedPropertyId}`)
       .then((res) => (res.ok ? res.json() : null))
-      .then((data) => setPropertyInfo(data?.property ?? null))
-      .catch(() => setPropertyInfo(null));
-  }, [viewing]);
+      .then((data) => {
+        if (!cancelled) setPropertyInfo(data?.property ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setPropertyInfo(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPropertyId]);
   const revealingRef = useRef(false);
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/auth');
   }, [authLoading, user, router]);
 
+  const activePropertyRef = useRef<string | undefined>(undefined);
+  activePropertyRef.current = selectedPropertyId;
+
+  // When a different viewing is selected, clear everything that belonged to the previous one.
+  useEffect(() => {
+    setAccessState('loading');
+    setOpensAt(null);
+    setClosesAt(null);
+    setCode(null);
+    setCodeVisible(false);
+  }, [viewing?.id]);
+
   const syncAccess = useCallback(async () => {
     if (!user) return;
+    const propertyId = selectedPropertyId;
     try {
       const res = await authFetch(
-        `/api/booking/access${viewing?.property_id ? `?propertyId=${encodeURIComponent(viewing.property_id)}` : ''}`
+        `/api/booking/access${propertyId ? `?propertyId=${encodeURIComponent(propertyId)}` : ''}`
       );
       const data = await res.json();
       if (!res.ok) return;
+      // Ignore a late answer for a viewing that is no longer selected.
+      if (propertyId !== activePropertyRef.current) return;
       setAccessState(data.state);
       setOpensAt(data.opensAt ? new Date(data.opensAt).getTime() : null);
       setClosesAt(data.closesAt ? new Date(data.closesAt).getTime() : null);
@@ -103,7 +128,7 @@ export default function DashboardPage() {
     } catch {
       // keep last known state on a transient network error
     }
-  }, [user]);
+  }, [user, selectedPropertyId]);
 
   useEffect(() => {
     if (!user || !viewingLoaded) return;
@@ -123,16 +148,16 @@ export default function DashboardPage() {
     authFetch('/api/booking/access', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ propertyId: viewing?.property_id }),
+      body: JSON.stringify({ propertyId: selectedPropertyId }),
     })
       .then((res) => res.json())
       .then((data) => {
-        if (data.code) setCode(data.code);
+        if (data.code && activePropertyRef.current === selectedPropertyId) setCode(data.code);
       })
       .finally(() => {
         revealingRef.current = false;
       });
-  }, [accessState, code]);
+  }, [accessState, code, selectedPropertyId]);
 
   useEffect(() => {
     if (accessState === 'after') {
@@ -197,11 +222,13 @@ export default function DashboardPage() {
           <p className="mb-3 text-sm font-semibold text-primary">Your scheduled viewings</p>
           <div className="grid gap-2 sm:grid-cols-2">
             {viewings.map((item) => (
-              <Link
+              <button
                 key={item.id}
-                href={`/property/${item.property_id}`}
+                type="button"
+                onClick={() => selectViewing(item.id)}
+                aria-pressed={item.id === viewing?.id}
                 className={cn(
-                  'rounded-lg border px-3 py-2 text-sm transition-colors hover:border-accent/50 hover:bg-secondary',
+                  'rounded-lg border px-3 py-2 text-left text-sm transition-colors hover:border-accent/50 hover:bg-secondary',
                   item.id === viewing?.id ? 'border-accent bg-accent/5' : 'border-border'
                 )}
               >
@@ -213,7 +240,7 @@ export default function DashboardPage() {
                   })}
                 </span>
                 <span className="text-xs text-muted-foreground">{item.slot_label}</span>
-              </Link>
+              </button>
             ))}
           </div>
         </div>
