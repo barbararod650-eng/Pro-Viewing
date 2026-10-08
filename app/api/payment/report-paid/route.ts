@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { getAuthedUser } from '@/lib/auth-server';
+import { notifyAdmin, paymentMethodLabels } from '@/lib/notify-admin';
 
 export const runtime = 'nodejs';
 
@@ -29,6 +30,18 @@ export async function POST(req: NextRequest) {
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    await notifyAdmin({
+      subject: 'Renter says they have paid',
+      intro: 'A renter reports that they sent the inspection fee.',
+      fields: {
+        Renter: data.user_name,
+        Email: data.user_email,
+        Method: paymentMethodLabels[data.method] ?? data.method,
+        Amount: `${data.amount} ${data.currency}`,
+      },
+      action: 'Check that the money arrived, then confirm it and enter their 6-digit access code (Payments tab).',
+    });
 
     return NextResponse.json({ paymentRequest: data });
   } catch {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
+import { notifyAdmin } from '@/lib/notify-admin';
 
 export const runtime = 'nodejs';
 
@@ -61,6 +62,13 @@ export async function POST(req: NextRequest) {
     if (insertError) {
       return NextResponse.json({ error: insertError.message }, { status: 500 });
     }
+
+    await notifyAdmin({
+      subject: 'New ID verification to review',
+      intro: 'A renter submitted their ID and selfie for verification.',
+      fields: { Name: name, Email: email },
+      action: 'Review the documents and approve or reject them (Verifications tab).',
+    });
 
     return NextResponse.json({ verification: data });
   } catch (err) {

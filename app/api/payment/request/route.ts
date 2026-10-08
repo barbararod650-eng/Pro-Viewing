@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, getDefaultPropertyId } from '@/lib/supabase-admin';
 import { getAuthedUser } from '@/lib/auth-server';
+import { notifyAdmin, paymentMethodLabels } from '@/lib/notify-admin';
 
 export const runtime = 'nodejs';
 
@@ -24,7 +25,7 @@ export async function POST(req: NextRequest) {
 
     const { data: property, error: propError } = await supabase
       .from('properties')
-      .select('inspection_fee, currency')
+      .select('name, inspection_fee, currency')
       .eq('id', propertyId)
       .maybeSingle();
 
@@ -52,6 +53,20 @@ export async function POST(req: NextRequest) {
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    const methodLabel = paymentMethodLabels[method] ?? method;
+    await notifyAdmin({
+      subject: `Payment request (${methodLabel})`,
+      intro: 'A renter asked for payment instructions.',
+      fields: {
+        Renter: user.name,
+        Email: user.email,
+        Property: property.name,
+        Method: methodLabel,
+        Amount: `${data.amount} ${data.currency}`,
+      },
+      action: 'Send them your account details (Payments tab, Needs account details).',
+    });
 
     return NextResponse.json({ paymentRequest: data });
   } catch {

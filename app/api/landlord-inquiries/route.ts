@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
+import { notifyAdmin } from '@/lib/notify-admin';
 
 export const runtime = 'nodejs';
 
@@ -32,6 +33,19 @@ export async function POST(req: NextRequest) {
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    await notifyAdmin({
+      subject: 'New landlord inquiry',
+      intro: 'A property owner wants to list a property.',
+      fields: {
+        Name: name,
+        Email: email,
+        Phone: phone,
+        Address: address,
+        Details: details,
+      },
+      action: 'Review the inquiry and mark it contacted, approved or declined (Inquiries tab).',
+    });
 
     return NextResponse.json({ inquiry: data });
   } catch {
