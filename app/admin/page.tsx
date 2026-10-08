@@ -91,6 +91,7 @@ export default function AdminPage() {
   const [payLoading, setPayLoading] = useState(false);
   const [payments, setPayments] = useState<PaymentRequest[]>([]);
   const [payActingOn, setPayActingOn] = useState<string | null>(null);
+  const [payError, setPayError] = useState('');
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [accessCodes, setAccessCodes] = useState<Record<string, string>>({});
 
@@ -167,8 +168,8 @@ export default function AdminPage() {
     }
   }
 
-  async function fetchPayments() {
-    setPayLoading(true);
+  async function fetchPayments(silent = false) {
+    if (!silent) setPayLoading(true);
     try {
       const res = await fetch('/api/admin/payments', {
         headers: { 'x-admin-password': password },
@@ -179,9 +180,17 @@ export default function AdminPage() {
     } catch {
       // ignore transient errors, user can hit refresh
     } finally {
-      setPayLoading(false);
+      if (!silent) setPayLoading(false);
     }
   }
+
+  // Pick up new renter requests without needing a manual refresh.
+  useEffect(() => {
+    if (!authed || tab !== 'payments') return;
+    const interval = setInterval(() => fetchPayments(true), 15000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authed, tab, password]);
 
   async function handleVerificationDecision(id: string, action: 'approve' | 'reject') {
     setVerActingOn(id);
@@ -354,6 +363,7 @@ export default function AdminPage() {
 
   async function handlePaymentAction(id: string, action: 'assign' | 'confirm' | 'cancel') {
     setPayActingOn(id);
+    setPayError('');
     try {
       const res = await fetch(`/api/admin/payments/${id}`, {
         method: 'POST',
@@ -364,7 +374,14 @@ export default function AdminPage() {
           accessCode: action === 'confirm' ? accessCodes[id] : undefined,
         }),
       });
-      if (res.ok) await fetchPayments();
+      if (res.ok) {
+        await fetchPayments();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setPayError(data.error || 'That action failed. Please try again.');
+      }
+    } catch {
+      setPayError('Network problem. Please try again.');
     } finally {
       setPayActingOn(null);
     }
@@ -900,11 +917,17 @@ export default function AdminPage() {
       {tab === 'payments' && (
         <div>
           <div className="mb-4 flex justify-end">
-            <Button variant="outline" size="sm" onClick={fetchPayments} disabled={payLoading}>
+            <Button variant="outline" size="sm" onClick={() => fetchPayments()} disabled={payLoading}>
               <RefreshCw className={`mr-1.5 h-4 w-4 ${payLoading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
           </div>
+
+          {payError && (
+            <p className="mb-6 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              {payError}
+            </p>
+          )}
 
           <section className="mb-10">
             <h2 className="mb-3 text-sm font-semibold text-muted-foreground">

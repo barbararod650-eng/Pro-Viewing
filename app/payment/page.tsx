@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { useApp } from '@/lib/app-context';
+import { authFetch } from '@/lib/auth-fetch';
 import { formatMoney } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import {
@@ -57,6 +58,7 @@ export default function PaymentPage() {
   const [submitting, setSubmitting] = useState(false);
   const [reportingPaid, setReportingPaid] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (!booking.propertyId) {
@@ -73,7 +75,12 @@ export default function PaymentPage() {
     if (!user) return;
     try {
       const propertyQuery = booking.propertyId ? `&propertyId=${encodeURIComponent(booking.propertyId)}` : '';
-      const res = await fetch(`/api/payment/status?email=${encodeURIComponent(user.email)}${propertyQuery}`);
+      const res = await authFetch(`/api/payment/status?email=${encodeURIComponent(user.email)}${propertyQuery}`);
+      if (!res.ok) {
+        // Keep any request we already have, but don't spin forever on first load.
+        setRequest((prev) => (prev === 'loading' ? null : prev));
+        return;
+      }
       const data = await res.json();
       setRequest(data.paymentRequest || null);
       if (data.paymentRequest?.status === 'confirmed' && booking.status !== 'paid') {
@@ -103,19 +110,24 @@ export default function PaymentPage() {
   const handleRequestInstructions = async () => {
     if (!user || !selectedMethod) return;
     setSubmitting(true);
+    setError('');
     try {
-      const res = await fetch('/api/payment/request', {
+      const res = await authFetch('/api/payment/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: user.email,
-          name: user.name,
           method: selectedMethod,
           propertyId: booking.propertyId,
         }),
       });
-      const data = await res.json();
-      if (res.ok) setRequest(data.paymentRequest);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setRequest(data.paymentRequest);
+      } else {
+        setError(data.error || 'We could not send your request. Please try again.');
+      }
+    } catch {
+      setError('Network problem. Please check your connection and try again.');
     } finally {
       setSubmitting(false);
     }
@@ -124,14 +136,21 @@ export default function PaymentPage() {
   const handleReportPaid = async () => {
     if (request === 'loading' || !request) return;
     setReportingPaid(true);
+    setError('');
     try {
-      const res = await fetch('/api/payment/report-paid', {
+      const res = await authFetch('/api/payment/report-paid', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: request.id }),
       });
-      const data = await res.json();
-      if (res.ok) setRequest(data.paymentRequest);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setRequest(data.paymentRequest);
+      } else {
+        setError(data.error || 'We could not record your payment. Please try again.');
+      }
+    } catch {
+      setError('Network problem. Please check your connection and try again.');
     } finally {
       setReportingPaid(false);
     }
@@ -252,6 +271,7 @@ export default function PaymentPage() {
                           'Request Payment Instructions'
                         )}
                       </Button>
+                      {error && <p className="text-sm text-destructive">{error}</p>}
                     </motion.div>
                   )}
 
@@ -292,6 +312,7 @@ export default function PaymentPage() {
                           "I've sent the payment"
                         )}
                       </Button>
+                      {error && <p className="text-sm text-destructive">{error}</p>}
                     </motion.div>
                   )}
 

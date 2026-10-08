@@ -118,7 +118,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const propertyQuery = targetPropertyId ? `&propertyId=${encodeURIComponent(targetPropertyId)}` : '';
       const [vRes, pRes, bRes] = await Promise.all([
         fetch(`/api/verify/status?email=${encodeURIComponent(email)}${propertyQuery}`),
-        fetch(`/api/payment/status?email=${encodeURIComponent(email)}${propertyQuery}`),
+        authFetch(`/api/payment/status?email=${encodeURIComponent(email)}${propertyQuery}`),
         authFetch('/api/booking'),
       ]);
       const v = await vRes.json();

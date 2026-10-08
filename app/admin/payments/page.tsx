@@ -36,6 +36,7 @@ export default function AdminPaymentsPage() {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [accessCodes, setAccessCodes] = useState<Record<string, string>>({});
   const [actingOn, setActingOn] = useState<string | null>(null);
+  const [actionError, setActionError] = useState('');
 
   useEffect(() => {
     const saved = sessionStorage.getItem('admin_password');
@@ -80,6 +81,7 @@ export default function AdminPaymentsPage() {
 
   async function handleAction(id: string, action: 'assign' | 'confirm' | 'cancel') {
     setActingOn(id);
+    setActionError('');
     try {
       const res = await fetch(`/api/admin/payments/${id}`, {
         method: 'POST',
@@ -92,7 +94,12 @@ export default function AdminPaymentsPage() {
       });
       if (res.ok) {
         await fetchRequests();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setActionError(data.error || 'That action failed. Please try again.');
       }
+    } catch {
+      setActionError('Network problem. Please try again.');
     } finally {
       setActingOn(null);
     }
@@ -139,6 +146,12 @@ export default function AdminPaymentsPage() {
           Refresh
         </Button>
       </div>
+
+      {actionError && (
+        <p className="mb-6 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          {actionError}
+        </p>
+      )}
 
       {loading && items.length === 0 && (
         <div className="flex justify-center py-16">
