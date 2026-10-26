@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
@@ -29,14 +29,23 @@ interface PropertySummary {
 }
 
 export default function HomePage() {
-  const [properties, setProperties] = useState<PropertySummary[] | 'loading'>('loading');
+  const [properties, setProperties] = useState<PropertySummary[] | 'loading' | 'error'>('loading');
+
+  const loadProperties = useCallback(() => {
+    setProperties('loading');
+    fetch('/api/properties')
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || 'Request failed');
+        setProperties(data.properties || []);
+      })
+      // A failed load must not look like "no listings": show a retry instead.
+      .catch(() => setProperties('error'));
+  }, []);
 
   useEffect(() => {
-    fetch('/api/properties')
-      .then((res) => res.json())
-      .then((data) => setProperties(data.properties || []))
-      .catch(() => setProperties([]));
-  }, []);
+    loadProperties();
+  }, [loadProperties]);
 
   return (
     <div className="bg-background">
@@ -64,13 +73,28 @@ export default function HomePage() {
           </div>
         )}
 
-        {properties !== 'loading' && properties.length === 0 && (
+        {properties === 'error' && (
+          <div className="rounded-xl border border-dashed border-border p-12 text-center">
+            <p className="text-muted-foreground">
+              We couldn't load the listings just now. Please try again in a moment.
+            </p>
+            <button
+              type="button"
+              onClick={loadProperties}
+              className="mt-4 rounded-md border border-border px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-secondary"
+            >
+              Try again
+            </button>
+          </div>
+        )}
+
+        {Array.isArray(properties) && properties.length === 0 && (
           <p className="rounded-xl border border-dashed border-border p-12 text-center text-muted-foreground">
             No listings are available right now — check back soon.
           </p>
         )}
 
-        {properties !== 'loading' && properties.length > 0 && (
+        {Array.isArray(properties) && properties.length > 0 && (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {properties.map((property, i) => (
               <motion.div

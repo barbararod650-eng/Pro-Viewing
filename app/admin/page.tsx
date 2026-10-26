@@ -78,6 +78,15 @@ const methodLabels: Record<string, string> = {
 
 type Tab = 'verifications' | 'payments' | 'properties' | 'inquiries';
 
+// "fetch failed" is what the server reports when it can't reach Supabase at all
+// (most often because a free Supabase project has been paused).
+function friendlyError(message: string): string {
+  if (/fetch failed/i.test(message)) {
+    return "The server can't reach the database (Supabase). Check that your Supabase project isn't paused, then try again.";
+  }
+  return message;
+}
+
 export default function AdminPage() {
   const [password, setPassword] = useState('');
   const [authed, setAuthed] = useState(false);
@@ -117,6 +126,7 @@ export default function AdminPage() {
   const [uploadingGallery, setUploadingGallery] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
+  const [propError, setPropError] = useState('');
 
   const [inqLoading, setInqLoading] = useState(false);
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
@@ -211,15 +221,22 @@ export default function AdminPage() {
   }
   async function fetchProperties() {
     setPropLoading(true);
+    setPropError('');
     try {
       const res = await fetch('/api/admin/properties', {
         headers: { 'x-admin-password': password },
       });
       if (res.status === 401) return handleAuthFailure();
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // Keep the last list on screen and say what went wrong, instead of
+        // showing "No properties yet." for a failed load.
+        setPropError(friendlyError(data.error || 'Could not load the listings.'));
+        return;
+      }
       setProperties(data.properties || []);
     } catch {
-      // ignore transient errors, user can hit refresh
+      setPropError('Could not reach the server. Check your connection and try again.');
     } finally {
       setPropLoading(false);
     }
@@ -238,24 +255,32 @@ export default function AdminPage() {
       setPropActingOn(null);
     }
   }
-  async function uploadPropertyImage(file: File): Promise<string | null> {
-    const formData = new FormData();
-    formData.append('file', file);
-    const res = await fetch('/api/admin/properties/upload-image', {
-      method: 'POST',
-      headers: { 'x-admin-password': password },
-      body: formData,
-    });
-    const data = await res.json();
-    return res.ok ? data.url : null;
+  async function uploadPropertyImage(file: File): Promise<{ url: string | null; error: string }> {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/admin/properties/upload-image', {
+        method: 'POST',
+        headers: { 'x-admin-password': password },
+        body: formData,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.url) return { url: data.url, error: '' };
+      if (res.status === 413) return { url: null, error: 'The photo is too large (limit about 4 MB).' };
+      return { url: null, error: friendlyError(data.error || 'Upload failed.') };
+    } catch {
+      return { url: null, error: 'Could not reach the server. Check your connection and try again.' };
+    }
   }
 
   async function handleCoverUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingCover(true);
-    const url = await uploadPropertyImage(file);
+    setCreateError('');
+    const { url, error } = await uploadPropertyImage(file);
     if (url) setNewImageUrl(url);
+    else setCreateError(`Cover photo did not upload. ${error}`);
     setUploadingCover(false);
   }
 
@@ -263,8 +288,16 @@ export default function AdminPage() {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
     setUploadingGallery(true);
-    const urls = await Promise.all(files.map(uploadPropertyImage));
-    setNewGalleryUrls((prev) => [...prev, ...urls.filter((u): u is string => !!u)]);
+    setCreateError('');
+    const results = await Promise.all(files.map(uploadPropertyImage));
+    const urls = results.map((r) => r.url).filter((u): u is string => !!u);
+    setNewGalleryUrls((prev) => [...prev, ...urls]);
+    const failed = results.filter((r) => !r.url);
+    if (failed.length > 0) {
+      setCreateError(
+        `${failed.length} of ${files.length} gallery photos did not upload. ${failed[0].error}`
+      );
+    }
     setUploadingGallery(false);
   }
 
@@ -316,14 +349,16 @@ export default function AdminPage() {
           status: 'draft',
         }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setCreateError(data.error || 'Something went wrong.');
+        setCreateError(friendlyError(data.error || 'Something went wrong.'));
         return;
       }
       resetForm();
       setShowAddForm(false);
       await fetchProperties();
+    } catch {
+      setCreateError('Could not reach the server. Check your connection and try again.');
     } finally {
       setCreating(false);
     }
@@ -738,7 +773,13 @@ export default function AdminPage() {
             </div>
           )}
 
-          {properties.length === 0 && !propLoading && (
+          {propError && (
+            <p className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              {propError}
+            </p>
+          )}
+
+          {properties.length === 0 && !propLoading && !propError && (
             <p className="rounded-lg border border-dashed border-border p-8 text-center text-muted-foreground">
               No properties yet.
             </p>
